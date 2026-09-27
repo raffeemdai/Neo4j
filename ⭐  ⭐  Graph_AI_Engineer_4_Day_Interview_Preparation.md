@@ -48,7 +48,6 @@ Each day contains:
 | Day 4 | Production + AWS + interview | Bedrock, Neptune, Lambda, API Gateway, security, architecture, mock interviews |
 
 ---
-
 # DAY 1 — GRAPH FOUNDATIONS + KNOWLEDGE GRAPH + CYPHER
 
 # Day 1 Practice Queries — Every Cypher Scenario (With Explanations & Before/After Data)
@@ -159,357 +158,6 @@ CREATE (:Person {personId:"EMP005", name:"Eve", age:26, city:"Denver"});
 
 ```text
 + Eve {personId:"EMP005", name:"Eve", age:26, city:"Denver"}   (no relationships)
-```
-
-# Neo4j: Remove Duplicate Nodes and Make Them Unique
-
-If you executed the same `CREATE` statement multiple times, Neo4j may create duplicate nodes.
-
-Example:
-
-```cypher
-CREATE (:Person {
-    personId:"EMP001",
-    name:"Alice",
-    age:30,
-    city:"Atlanta"
-});
-```
-
-If you run this multiple times, Neo4j creates multiple `Person` nodes with the same `personId`.
-
----
-
-# 1. Check for Duplicate Nodes
-
-Use:
-
-```cypher
-MATCH (p:Person)
-RETURN p.personId, count(*) AS count;
-```
-
-Example output:
-
-```text
-personId    count
---------    -----
-EMP001      3
-EMP002      2
-EMP003      1
-```
-
-This means:
-
-```text
-EMP001 → 3 nodes exist
-EMP002 → 2 nodes exist
-EMP003 → only 1 node exists
-```
-
----
-
-# 2. Remove Duplicate Nodes
-
-To keep one node and delete the remaining duplicates:
-
-```cypher
-MATCH (p:Person)
-WITH p.personId AS personId, collect(p) AS nodes
-WHERE size(nodes) > 1
-FOREACH (n IN tail(nodes) | DETACH DELETE n);
-```
-
-## How it works
-
-Suppose Neo4j has:
-
-```text
-EMP001 → [node1, node2, node3]
-```
-
-`collect(p)` creates a list:
-
-```text
-[node1, node2, node3]
-```
-
-`tail(nodes)` means:
-
-```text
-[node2, node3]
-```
-
-So Neo4j:
-
-```text
-Keeps   → node1
-Deletes → node2
-Deletes → node3
-```
-
-`DETACH DELETE` also removes any relationships connected to the duplicate nodes.
-
----
-
-# 3. Verify That Duplicates Are Removed
-
-Run:
-
-```cypher
-MATCH (p:Person)
-RETURN p.personId, count(*) AS count;
-```
-
-Expected output:
-
-```text
-personId    count
---------    -----
-EMP001      1
-EMP002      1
-EMP003      1
-EMP004      1
-```
-
----
-
-# 4. Create a Unique Constraint
-
-Now create a constraint so Neo4j will not allow duplicate `personId` values in the future.
-
-```cypher
-CREATE CONSTRAINT person_id_unique IF NOT EXISTS
-FOR (p:Person)
-REQUIRE p.personId IS UNIQUE;
-```
-
-This means:
-
-```text
-Person.personId must always be unique
-```
-
-For example:
-
-```text
-EMP001 → allowed once
-
-EMP001 → second node NOT allowed
-```
-
----
-
-# 5. Unique Constraint for Customer
-
-```cypher
-CREATE CONSTRAINT customer_id_unique IF NOT EXISTS
-FOR (c:Customer)
-REQUIRE c.customerId IS UNIQUE;
-```
-
----
-
-# 6. Unique Constraint for Product
-
-```cypher
-CREATE CONSTRAINT product_id_unique IF NOT EXISTS
-FOR (p:Product)
-REQUIRE p.productId IS UNIQUE;
-```
-
----
-
-# 7. Unique Constraint for Company
-
-```cypher
-CREATE CONSTRAINT company_id_unique IF NOT EXISTS
-FOR (c:Company)
-REQUIRE c.companyId IS UNIQUE;
-```
-
----
-
-# 8. Use MERGE Instead of CREATE
-
-After creating the unique constraint, use `MERGE` instead of `CREATE`.
-
-Instead of:
-
-```cypher
-CREATE (:Person {
-    personId:"EMP001",
-    name:"Alice",
-    age:30,
-    city:"Atlanta"
-});
-```
-
-Use:
-
-```cypher
-MERGE (p:Person {personId:"EMP001"})
-SET p.name = "Alice",
-    p.age = 30,
-    p.city = "Atlanta";
-```
-
----
-
-# 9. What MERGE Does
-
-```text
-MERGE
-  |
-  +-- Node already exists
-  |       |
-  |       +--> Use existing node
-  |
-  +-- Node does not exist
-          |
-          +--> Create new node
-```
-
-Example:
-
-```cypher
-MERGE (p:Person {personId:"EMP001"})
-RETURN p;
-```
-
-If `EMP001` already exists:
-
-```text
-No new node is created
-```
-
-If `EMP001` does not exist:
-
-```text
-New node is created
-```
-
----
-
-# 10. CREATE vs MERGE
-
-| Cypher | Meaning |
-|---|---|
-| `CREATE` | Always creates a new node |
-| `MERGE` | Finds an existing node or creates it |
-| `SET` | Updates node properties |
-| `UNIQUE CONSTRAINT` | Prevents duplicate values |
-
----
-
-# Snowflake / SQL Comparison
-
-```text
-SQL / Snowflake                 Neo4j
--------------------------------------------------
-INSERT                          CREATE
-UPSERT                          MERGE
-UPDATE                          SET
-UNIQUE CONSTRAINT               UNIQUE CONSTRAINT
-```
-
----
-
-# Important Difference
-
-## CREATE
-
-```cypher
-CREATE (:Person {personId:"EMP001"});
-```
-
-Run 3 times:
-
-```text
-EMP001
-EMP001
-EMP001
-```
-
-Three nodes may be created.
-
----
-
-## MERGE
-
-```cypher
-MERGE (:Person {personId:"EMP001"});
-```
-
-Run 3 times:
-
-```text
-EMP001
-```
-
-Only one matching node is used.
-
----
-
-# Recommended Neo4j Pattern
-
-## Step 1: Create Constraint Once
-
-```cypher
-CREATE CONSTRAINT person_id_unique IF NOT EXISTS
-FOR (p:Person)
-REQUIRE p.personId IS UNIQUE;
-```
-
-## Step 2: Use MERGE When Loading Data
-
-```cypher
-MERGE (p:Person {personId:"EMP001"})
-SET p.name = "Alice",
-    p.age = 30,
-    p.city = "Atlanta";
-```
-
----
-
-# Memory Trick
-
-```text
-CREATE
-= Always Create
-= Duplicate Possible
-
-MERGE
-= Match OR Create
-
-SET
-= Update
-
-UNIQUE CONSTRAINT
-= Duplicate Protection
-```
-
----
-
-# Best Practice
-
-```text
-UNIQUE CONSTRAINT + MERGE
-```
-
-This is the safest pattern when a node ID must be unique.
-
-Example:
-
-```cypher
-CREATE CONSTRAINT person_id_unique IF NOT EXISTS
-FOR (p:Person)
-REQUIRE p.personId IS UNIQUE;
-
-MERGE (p:Person {personId:"EMP001"})
-SET p.name = "Alice",
-    p.age = 30,
-    p.city = "Atlanta";
 ```
 
 ### Query 2 — create a relationship between two existing nodes
@@ -997,6 +645,404 @@ RETURN p.name, friendCount;
 **Result:** Alice(1), Bob(1), Carol(1) — all tied at 1 outgoing `KNOWS` edge each (order among ties is arbitrary). Dave doesn't appear at all — he has zero outgoing `KNOWS` relationships, so the initial `MATCH` never produces a row for him.
 
 
+## 12. Aggregations *(read-only)*
+
+**Data used by this section:** same purchase data as Section 11.
+
+### Query 1 — count
+
+```cypher
+MATCH (c:Customer)-[:PURCHASED]->(p:Product)
+RETURN c.name, count(p) AS totalPurchases;
+```
+
+**Result:** Alice(2), Bob(2), Carol(1).
+
+### Query 2 — sum, avg, min, max
+
+**Explanation:** All four aggregate functions can run side by side over the same grouping (`c.name`), each computed from the relationship property `amount`.
+
+```cypher
+MATCH (c:Customer)-[r:PURCHASED]->(:Product)
+RETURN c.name, sum(r.amount) AS totalSpend, avg(r.amount) AS avgSpend,
+       min(r.amount) AS minSpend, max(r.amount) AS maxSpend;
+```
+
+**Result:**
+
+| c.name | totalSpend | avgSpend | minSpend | maxSpend |
+|---|---|---|---|---|
+| Alice | 1250 | 625 | 50 | 1200 |
+| Bob | 1280 | 640 | 180 | 1100 |
+| Carol | 45 | 45 | 45 | 45 |
+
+### Query 3 — collect into a list
+
+**Explanation:** `collect()` gathers all matching values per group into a single list column instead of one row per value.
+
+```cypher
+// collect() into a list
+MATCH (c:Customer)-[:PURCHASED]->(p:Product)
+RETURN c.name, collect(p.name) AS productsBought;
+```
+
+**Result:** Alice → `["Laptop", "Mouse"]`, Bob → `["Laptop", "Tennis Racket"]`, Carol → `["Mouse"]`.
+
+---
+
+## 13. UNWIND — lists to rows and bulk inserts
+
+### Query 1 — explode a list *(read-only)*
+
+**Explanation:** `UNWIND` turns a literal list into one row per element — the reverse of `collect()`. No graph data is touched; the list is just a literal.
+
+```cypher
+// Explode a list into rows
+UNWIND ["Neo4j", "Python", "AWS"] AS skill
+RETURN skill;
+```
+
+**Result:** 3 rows — `Neo4j`, `Python`, `AWS`.
+
+### Query 2 — bulk upsert (mutation)
+
+**Explanation:** Combines `UNWIND` with `MERGE` to upsert many rows in one query — the standard production pattern for loading a batch of records (e.g. from a CSV or API payload) without duplicating existing ones.
+
+**Before:** 3 customers — C1 Alice, C2 Bob, C3 Carol.
+
+```cypher
+// Bulk upsert pattern (as used in production ingestion)
+UNWIND [
+  {customerId: "C4", name: "Diana"},
+  {customerId: "C5", name: "Ethan"}
+] AS row
+MERGE (c:Customer {customerId: row.customerId})
+SET c.name = row.name
+RETURN c;
+```
+
+**After:** 5 customers:
+
+```text
++ C4 Diana   (no purchases yet)
++ C5 Ethan   (no purchases yet)
+```
+
+**Scenario to notice:** Diana and Ethan now exist in the graph with zero `PURCHASED` relationships. Watch for them later — Section 17's `CALL` subquery will show them with `purchaseCount = 0`, while Section 16's `EXISTS` check will simply skip them (since they own no products at all).
+
+---
+
+## 14. Paths — variable-length traversal *(read-only)*
+
+**Data used by this section:** the `KNOWS` chain from Setup, untouched by any of the property edits above: `Alice → Bob → Carol → Dave`.
+
+### Query 1 — 1 to 3 hops
+
+**Explanation:** `*1..3` matches any path of 1, 2, *or* 3 hops along `KNOWS` — Neo4j returns every path length in that range, not just the longest one.
+
+```cypher
+// 1 to 3 hops of KNOWS
+MATCH path =
+    (a:Person {name:"Alice"})-[:KNOWS*1..3]->(b:Person)
+RETURN path;
+```
+
+**Result:** 3 paths —
+`Alice→Bob` (1 hop), `Alice→Bob→Carol` (2 hops), `Alice→Bob→Carol→Dave` (3 hops).
+
+### Query 2 — shortest path
+
+**Explanation:** `shortestPath()` finds the minimum-hop connection between two named nodes, searching in either direction since the pattern uses `-` instead of `->`.
+
+```cypher
+// Shortest path between two people
+MATCH p = shortestPath(
+    (a:Person {name:"Alice"})-[:KNOWS*]-(d:Person {name:"Dave"})
+)
+RETURN p;
+```
+
+**Result:** `Alice → Bob → Carol → Dave` (3 hops) — there's only one connecting path in this graph, so it's also the shortest one.
+
+---
+
+## 15. Two Degrees of Separation *(read-only)*
+
+**Data used by this section:** same `KNOWS` chain — `Alice → Bob → Carol → Dave`.
+
+**Explanation:** Walks exactly two `KNOWS` hops from Alice, then filters out Alice herself and anyone directly connected to her (to make sure the result is *exactly* two degrees away, not one).
+
+```cypher
+MATCH (alice:Person {name:"Alice"})
+      -[:KNOWS]->
+      (:Person)
+      -[:KNOWS]->
+      (candidate:Person)
+WHERE candidate <> alice
+  AND NOT (alice)-[:KNOWS]-(candidate)
+RETURN DISTINCT candidate.name;
+```
+
+**Result:** `Carol` only.
+
+- Path traced: `Alice → Bob → Carol` (Bob is the "friend", Carol is the "candidate").
+- Dave is 3 hops away, not 2, so he isn't a candidate here even though he's also not directly connected to Alice.
+
+---
+
+## 16. EXISTS Subquery *(read-only)*
+
+**Data used by this section:** all 5 customers as of Section 13 (Alice, Bob, Carol, Diana, Ethan), but only Alice/Bob/Carol have any purchases.
+
+**Explanation:** `EXISTS { ... }` is a boolean check — it returns true if the inner pattern matches at least once for that row, without pulling back any data from the subquery itself.
+
+```cypher
+MATCH (c:Customer)
+WHERE EXISTS {
+    MATCH (c)-[:PURCHASED]->(:Product {category:"Electronics"})
+}
+RETURN c.name;
+```
+
+**Result:** `Alice`, `Bob`, `Carol` — each purchased at least one `Electronics` product (Laptop and/or Mouse). Diana and Ethan are skipped: they have no purchases at all, so the inner pattern never matches for them.
+
+---
+
+## 17. CALL Subquery *(read-only)*
+
+**Data used by this section:** same 5 customers as Section 16.
+
+**Explanation:** The `CALL (c) { ... }` subquery runs once **per row** coming out of the outer `MATCH`, computing `purchaseCount` independently for each customer — including customers with zero purchases, since `count()` on an empty match still returns `0` rather than dropping the row.
+
+```cypher
+MATCH (c:Customer)
+CALL (c) {
+    MATCH (c)-[:PURCHASED]->(p:Product)
+    RETURN count(p) AS purchaseCount
+}
+RETURN c.name, purchaseCount;
+```
+
+**Result:**
+
+| c.name | purchaseCount |
+|---|---|
+| Alice | 2 |
+| Bob | 2 |
+| Carol | 1 |
+| Diana | 0 |
+| Ethan | 0 |
+
+Notice this is a wider result than Section 16's `EXISTS` version — Diana and Ethan *do* show up here (with `0`), because `CALL` returns one row per outer match no matter what the subquery finds, whereas `EXISTS` filters rows out entirely.
+
+---
+
+## 18. Constraints
+
+### Query 1 — create a uniqueness constraint
+
+**Explanation:** Registers a rule that no two `Customer` nodes can share the same `customerId`. Creating a uniqueness constraint also silently creates a backing index on that property (used later in Section 19).
+
+**Before:** `SHOW CONSTRAINTS` returns 0 rows (fresh database, no constraints defined yet).
+
+```cypher
+// Create a uniqueness constraint
+CREATE CONSTRAINT customer_id_unique IF NOT EXISTS
+FOR (c:Customer)
+REQUIRE c.customerId IS UNIQUE;
+```
+
+**After:** `SHOW CONSTRAINTS` returns 1 row:
+
+| name | type | entityType | labelsOrTypes | properties |
+|---|---|---|---|---|
+| customer_id_unique | UNIQUENESS | NODE | [Customer] | [customerId] |
+
+### Query 2 — view constraints
+
+```cypher
+// View all constraints
+SHOW CONSTRAINTS;
+```
+
+**Result:** the single row shown above.
+
+**Scenario to notice:** try creating two `Customer` nodes with the same `customerId` now — it should fail with a `ConstraintValidationFailed` error.
+
+---
+
+## 19. Indexes
+
+### Query 1 — create an index
+
+**Explanation:** Adds a range index on `Customer.name` so lookups like `MATCH (c:Customer {name:"Alice"})` don't require scanning every customer node.
+
+**Before:** `SHOW INDEXES` already returns **1 row** at this point — the backing index Neo4j auto-created for the `customer_id_unique` constraint in Section 18 (constraints and indexes are linked; creating one often creates the other).
+
+```cypher
+// Create an index
+CREATE INDEX customer_name_index IF NOT EXISTS
+FOR (c:Customer)
+ON (c.name);
+```
+
+**After:** `SHOW INDEXES` returns **2 rows** — the constraint-backed index plus the new one:
+
+| name | labelsOrTypes | properties | type |
+|---|---|---|---|
+| customer_id_unique | [Customer] | [customerId] | RANGE (constraint-backed) |
+| customer_name_index | [Customer] | [name] | RANGE |
+
+### Query 2 — view indexes
+
+```cypher
+// View all indexes
+SHOW INDEXES;
+```
+
+**Result:** the two rows shown above.
+
+**Scenario to notice:** without an index, `MATCH (c:Customer {name:"Alice"})` has to scan every `Customer` node; with the index, Neo4j jumps straight to the matching node.
+
+---
+
+## 20. Query Plan — EXPLAIN vs PROFILE *(read-only)*
+
+**Data used by this section:** the customer `C1 Alice`, now reachable via the `customer_id_unique` index from Section 18.
+
+### Query 1 — EXPLAIN
+
+**Explanation:** Shows the planned execution strategy **without running the query** — no rows come back, only the plan.
+
+```cypher
+// Plan only, does not execute
+EXPLAIN
+MATCH (c:Customer {customerId:"C1"})
+RETURN c;
+```
+
+**Result:** An execution plan (e.g. `NodeUniqueIndexSeek` on `customer_id_unique`) — **0 data rows**, since `EXPLAIN` never actually executes the query.
+
+### Query 2 — PROFILE
+
+**Explanation:** Runs the query for real **and** attaches runtime statistics (rows produced, DB hits, time per operator) to the same kind of plan.
+
+```cypher
+// Executes AND shows the plan + runtime stats
+PROFILE
+MATCH (c:Customer {customerId:"C1"})
+RETURN c;
+```
+
+**Result:** 1 data row — `Customer {customerId:"C1", name:"Alice"}` — plus the annotated plan showing exactly how many DB hits the index seek took.
+
+
+## 21. Database Objects — Admin, Schema, and Procedural *(read-only)*
+
+**Explanation:** These `SHOW` commands inspect the objects Neo4j maintains *around* your graph data — they don't touch nodes or relationships at all.
+
+### Query 1 — schema objects
+
+```cypher
+// Schema objects
+SHOW CONSTRAINTS;
+SHOW INDEXES;
+```
+
+**Result (at this point in the walkthrough):** 1 constraint (`customer_id_unique`) and 2 indexes (`customer_id_unique`'s backing index + `customer_name_index`) — exactly the state left behind by Sections 18–19.
+
+### Query 2 — admin / server objects
+
+```cypher
+// Admin / server objects
+SHOW DATABASES;
+SHOW USERS;
+SHOW ROLES;
+```
+
+**Result (typical fresh instance):**
+- `SHOW DATABASES` → `neo4j` (your default database) and `system` (Neo4j's internal metadata database) — always present.
+- `SHOW USERS` / `SHOW ROLES` → require Neo4j **Enterprise** edition or Aura; Community edition has no multi-user role-based security, so these commands aren't available there.
+
+### Query 3 — procedural objects
+
+```cypher
+// Procedural objects
+SHOW PROCEDURES;
+SHOW FUNCTIONS;
+```
+
+**Result:** a long built-in list (hundreds of rows) — e.g. `dbms.components`, `db.schema.visualization` among procedures, and `count()`, `labels()`, `collect()` among functions — plus any APOC procedures/functions if the APOC plugin is installed.
+
+**Scenario to notice:** run `SHOW INDEXES` before and after Section 19 to watch `customer_name_index` appear — same for `SHOW CONSTRAINTS` before/after Section 18.
+
+---
+
+## Mini Project Recap — Customer / Product Graph *(read-only)*
+
+**Data used by this section:** the full purchase graph as of Section 13 — Alice (Laptop, Mouse), Bob (Laptop, Tennis Racket), Carol (Mouse), plus Diana and Ethan with zero purchases each.
+
+### Query 1 — products purchased by Alice
+
+```cypher
+// 1. Products purchased by Alice
+MATCH (:Customer {name:"Alice"})-[:PURCHASED]->(p:Product)
+RETURN p.name;
+```
+
+**Result:** `Laptop`, `Mouse`.
+
+### Query 2 — customers who purchased the Laptop
+
+```cypher
+// 2. Customers who purchased the Laptop
+MATCH (c:Customer)-[:PURCHASED]->(:Product {name:"Laptop"})
+RETURN c.name;
+```
+
+**Result:** `Alice`, `Bob`.
+
+### Query 3 — customers who purchased the same product as Alice
+
+**Explanation:** Walks from Alice to a product she bought, then back out to any *other* customer who also bought that same product.
+
+```cypher
+// 3. Customers who purchased the same product as Alice
+MATCH (alice:Customer {name:"Alice"})-[:PURCHASED]->(p:Product)<-[:PURCHASED]-(other:Customer)
+WHERE other <> alice
+RETURN DISTINCT other.name, p.name;
+```
+
+**Result:**
+
+| other.name | p.name |
+|---|---|
+| Bob | Laptop |
+| Carol | Mouse |
+
+### Query 4 — most purchased product
+
+```cypher
+// 4. Most purchased product
+MATCH (:Customer)-[:PURCHASED]->(p:Product)
+RETURN p.name, count(*) AS purchases
+ORDER BY purchases DESC
+LIMIT 1;
+```
+
+**Result:** **Either** `Laptop` **or** `Mouse` — both are tied at 2 purchases each (Laptop: Alice+Bob; Mouse: Alice+Carol). Tennis Racket has only 1.
+
+**Scenario to notice:** this is a genuine tie. `ORDER BY ... LIMIT 1` with no tiebreaker doesn't guarantee *which* of the tied rows comes back — a great interview point about why you should add a secondary `ORDER BY` key (or return all tied rows) whenever ties are possible.
+
+---
+
+## Suggested Practice Order
+
+1. Run Section 0 (setup) once.
+2. Work through Sections 1–9 in order (CRUD basics) — each one changes the graph, so run them in sequence.
+3. Sections 10–17 are read-heavy and safe to run in any order, any number of times.
+4. Sections 18–20 (constraints/indexes/query plan) are best run last since they add schema objects.
+5. Re-run Section 0 from a clean database if you want to reset and repeat.
 # Neo4j `WITH` Clause — Different Scenarios
 
 `WITH` is one of the most important Cypher clauses because it lets you **pass data from one stage of the query to the next**.
@@ -1627,297 +1673,356 @@ WITH = Take the current result, process it, and pass selected values to the next
 ```
 ---
 
-## 12. Aggregations *(read-only)*
+# Neo4j: Remove Duplicate Nodes and Make Them Unique
 
-**Data used by this section:** same purchase data as Section 11.
+If you executed the same `CREATE` statement multiple times, Neo4j may create duplicate nodes.
 
-### Query 1 — count
-
-```cypher
-MATCH (c:Customer)-[:PURCHASED]->(p:Product)
-RETURN c.name, count(p) AS totalPurchases;
-```
-
-**Result:** Alice(2), Bob(2), Carol(1).
-
-### Query 2 — sum, avg, min, max
-
-**Explanation:** All four aggregate functions can run side by side over the same grouping (`c.name`), each computed from the relationship property `amount`.
+Example:
 
 ```cypher
-MATCH (c:Customer)-[r:PURCHASED]->(:Product)
-RETURN c.name, sum(r.amount) AS totalSpend, avg(r.amount) AS avgSpend,
-       min(r.amount) AS minSpend, max(r.amount) AS maxSpend;
+CREATE (:Person {
+    personId:"EMP001",
+    name:"Alice",
+    age:30,
+    city:"Atlanta"
+});
 ```
 
-**Result:**
-
-| c.name | totalSpend | avgSpend | minSpend | maxSpend |
-|---|---|---|---|---|
-| Alice | 1250 | 625 | 50 | 1200 |
-| Bob | 1280 | 640 | 180 | 1100 |
-| Carol | 45 | 45 | 45 | 45 |
-
-### Query 3 — collect into a list
-
-**Explanation:** `collect()` gathers all matching values per group into a single list column instead of one row per value.
-
-```cypher
-// collect() into a list
-MATCH (c:Customer)-[:PURCHASED]->(p:Product)
-RETURN c.name, collect(p.name) AS productsBought;
-```
-
-**Result:** Alice → `["Laptop", "Mouse"]`, Bob → `["Laptop", "Tennis Racket"]`, Carol → `["Mouse"]`.
+If you run this multiple times, Neo4j creates multiple `Person` nodes with the same `personId`.
 
 ---
 
-## 13. UNWIND — lists to rows and bulk inserts
+# 1. Check for Duplicate Nodes
 
-### Query 1 — explode a list *(read-only)*
-
-**Explanation:** `UNWIND` turns a literal list into one row per element — the reverse of `collect()`. No graph data is touched; the list is just a literal.
+Use:
 
 ```cypher
-// Explode a list into rows
-UNWIND ["Neo4j", "Python", "AWS"] AS skill
-RETURN skill;
+MATCH (p:Person)
+RETURN p.personId, count(*) AS count;
 ```
 
-**Result:** 3 rows — `Neo4j`, `Python`, `AWS`.
-
-### Query 2 — bulk upsert (mutation)
-
-**Explanation:** Combines `UNWIND` with `MERGE` to upsert many rows in one query — the standard production pattern for loading a batch of records (e.g. from a CSV or API payload) without duplicating existing ones.
-
-**Before:** 3 customers — C1 Alice, C2 Bob, C3 Carol.
-
-```cypher
-// Bulk upsert pattern (as used in production ingestion)
-UNWIND [
-  {customerId: "C4", name: "Diana"},
-  {customerId: "C5", name: "Ethan"}
-] AS row
-MERGE (c:Customer {customerId: row.customerId})
-SET c.name = row.name
-RETURN c;
-```
-
-**After:** 5 customers:
+Example output:
 
 ```text
-+ C4 Diana   (no purchases yet)
-+ C5 Ethan   (no purchases yet)
+personId    count
+--------    -----
+EMP001      3
+EMP002      2
+EMP003      1
 ```
 
-**Scenario to notice:** Diana and Ethan now exist in the graph with zero `PURCHASED` relationships. Watch for them later — Section 17's `CALL` subquery will show them with `purchaseCount = 0`, while Section 16's `EXISTS` check will simply skip them (since they own no products at all).
+This means:
+
+```text
+EMP001 → 3 nodes exist
+EMP002 → 2 nodes exist
+EMP003 → only 1 node exists
+```
 
 ---
 
-## 14. Paths — variable-length traversal *(read-only)*
+# 2. Remove Duplicate Nodes
 
-**Data used by this section:** the `KNOWS` chain from Setup, untouched by any of the property edits above: `Alice → Bob → Carol → Dave`.
-
-### Query 1 — 1 to 3 hops
-
-**Explanation:** `*1..3` matches any path of 1, 2, *or* 3 hops along `KNOWS` — Neo4j returns every path length in that range, not just the longest one.
+To keep one node and delete the remaining duplicates:
 
 ```cypher
-// 1 to 3 hops of KNOWS
-MATCH path =
-    (a:Person {name:"Alice"})-[:KNOWS*1..3]->(b:Person)
-RETURN path;
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN tail(nodes) | DETACH DELETE n);
 ```
 
-**Result:** 3 paths —
-`Alice→Bob` (1 hop), `Alice→Bob→Carol` (2 hops), `Alice→Bob→Carol→Dave` (3 hops).
+## How it works
 
-### Query 2 — shortest path
+Suppose Neo4j has:
 
-**Explanation:** `shortestPath()` finds the minimum-hop connection between two named nodes, searching in either direction since the pattern uses `-` instead of `->`.
-
-```cypher
-// Shortest path between two people
-MATCH p = shortestPath(
-    (a:Person {name:"Alice"})-[:KNOWS*]-(d:Person {name:"Dave"})
-)
-RETURN p;
+```text
+EMP001 → [node1, node2, node3]
 ```
 
-**Result:** `Alice → Bob → Carol → Dave` (3 hops) — there's only one connecting path in this graph, so it's also the shortest one.
+`collect(p)` creates a list:
+
+```text
+[node1, node2, node3]
+```
+
+`tail(nodes)` means:
+
+```text
+[node2, node3]
+```
+
+So Neo4j:
+
+```text
+Keeps   → node1
+Deletes → node2
+Deletes → node3
+```
+
+`DETACH DELETE` also removes any relationships connected to the duplicate nodes.
 
 ---
 
-## 15. Two Degrees of Separation *(read-only)*
+# 3. Verify That Duplicates Are Removed
 
-**Data used by this section:** same `KNOWS` chain — `Alice → Bob → Carol → Dave`.
-
-**Explanation:** Walks exactly two `KNOWS` hops from Alice, then filters out Alice herself and anyone directly connected to her (to make sure the result is *exactly* two degrees away, not one).
+Run:
 
 ```cypher
-MATCH (alice:Person {name:"Alice"})
-      -[:KNOWS]->
-      (:Person)
-      -[:KNOWS]->
-      (candidate:Person)
-WHERE candidate <> alice
-  AND NOT (alice)-[:KNOWS]-(candidate)
-RETURN DISTINCT candidate.name;
+MATCH (p:Person)
+RETURN p.personId, count(*) AS count;
 ```
 
-**Result:** `Carol` only.
+Expected output:
 
-- Path traced: `Alice → Bob → Carol` (Bob is the "friend", Carol is the "candidate").
-- Dave is 3 hops away, not 2, so he isn't a candidate here even though he's also not directly connected to Alice.
+```text
+personId    count
+--------    -----
+EMP001      1
+EMP002      1
+EMP003      1
+EMP004      1
+```
 
 ---
 
-## 16. EXISTS Subquery *(read-only)*
+# 4. Create a Unique Constraint
 
-**Data used by this section:** all 5 customers as of Section 13 (Alice, Bob, Carol, Diana, Ethan), but only Alice/Bob/Carol have any purchases.
-
-**Explanation:** `EXISTS { ... }` is a boolean check — it returns true if the inner pattern matches at least once for that row, without pulling back any data from the subquery itself.
+Now create a constraint so Neo4j will not allow duplicate `personId` values in the future.
 
 ```cypher
-MATCH (c:Customer)
-WHERE EXISTS {
-    MATCH (c)-[:PURCHASED]->(:Product {category:"Electronics"})
-}
-RETURN c.name;
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
 ```
 
-**Result:** `Alice`, `Bob`, `Carol` — each purchased at least one `Electronics` product (Laptop and/or Mouse). Diana and Ethan are skipped: they have no purchases at all, so the inner pattern never matches for them.
+This means:
+
+```text
+Person.personId must always be unique
+```
+
+For example:
+
+```text
+EMP001 → allowed once
+
+EMP001 → second node NOT allowed
+```
 
 ---
 
-## 17. CALL Subquery *(read-only)*
-
-**Data used by this section:** same 5 customers as Section 16.
-
-**Explanation:** The `CALL (c) { ... }` subquery runs once **per row** coming out of the outer `MATCH`, computing `purchaseCount` independently for each customer — including customers with zero purchases, since `count()` on an empty match still returns `0` rather than dropping the row.
+# 5. Unique Constraint for Customer
 
 ```cypher
-MATCH (c:Customer)
-CALL (c) {
-    MATCH (c)-[:PURCHASED]->(p:Product)
-    RETURN count(p) AS purchaseCount
-}
-RETURN c.name, purchaseCount;
-```
-
-**Result:**
-
-| c.name | purchaseCount |
-|---|---|
-| Alice | 2 |
-| Bob | 2 |
-| Carol | 1 |
-| Diana | 0 |
-| Ethan | 0 |
-
-Notice this is a wider result than Section 16's `EXISTS` version — Diana and Ethan *do* show up here (with `0`), because `CALL` returns one row per outer match no matter what the subquery finds, whereas `EXISTS` filters rows out entirely.
-
----
-
-## 18. Constraints
-
-### Query 1 — create a uniqueness constraint
-
-**Explanation:** Registers a rule that no two `Customer` nodes can share the same `customerId`. Creating a uniqueness constraint also silently creates a backing index on that property (used later in Section 19).
-
-**Before:** `SHOW CONSTRAINTS` returns 0 rows (fresh database, no constraints defined yet).
-
-```cypher
-// Create a uniqueness constraint
 CREATE CONSTRAINT customer_id_unique IF NOT EXISTS
 FOR (c:Customer)
 REQUIRE c.customerId IS UNIQUE;
 ```
 
-**After:** `SHOW CONSTRAINTS` returns 1 row:
+---
 
-| name | type | entityType | labelsOrTypes | properties |
-|---|---|---|---|---|
-| customer_id_unique | UNIQUENESS | NODE | [Customer] | [customerId] |
-
-### Query 2 — view constraints
+# 6. Unique Constraint for Product
 
 ```cypher
-// View all constraints
-SHOW CONSTRAINTS;
+CREATE CONSTRAINT product_id_unique IF NOT EXISTS
+FOR (p:Product)
+REQUIRE p.productId IS UNIQUE;
 ```
-
-**Result:** the single row shown above.
-
-**Scenario to notice:** try creating two `Customer` nodes with the same `customerId` now — it should fail with a `ConstraintValidationFailed` error.
 
 ---
 
-## 19. Indexes
-
-### Query 1 — create an index
-
-**Explanation:** Adds a range index on `Customer.name` so lookups like `MATCH (c:Customer {name:"Alice"})` don't require scanning every customer node.
-
-**Before:** `SHOW INDEXES` already returns **1 row** at this point — the backing index Neo4j auto-created for the `customer_id_unique` constraint in Section 18 (constraints and indexes are linked; creating one often creates the other).
+# 7. Unique Constraint for Company
 
 ```cypher
-// Create an index
-CREATE INDEX customer_name_index IF NOT EXISTS
-FOR (c:Customer)
-ON (c.name);
+CREATE CONSTRAINT company_id_unique IF NOT EXISTS
+FOR (c:Company)
+REQUIRE c.companyId IS UNIQUE;
 ```
-
-**After:** `SHOW INDEXES` returns **2 rows** — the constraint-backed index plus the new one:
-
-| name | labelsOrTypes | properties | type |
-|---|---|---|---|
-| customer_id_unique | [Customer] | [customerId] | RANGE (constraint-backed) |
-| customer_name_index | [Customer] | [name] | RANGE |
-
-### Query 2 — view indexes
-
-```cypher
-// View all indexes
-SHOW INDEXES;
-```
-
-**Result:** the two rows shown above.
-
-**Scenario to notice:** without an index, `MATCH (c:Customer {name:"Alice"})` has to scan every `Customer` node; with the index, Neo4j jumps straight to the matching node.
 
 ---
 
-## 20. Query Plan — EXPLAIN vs PROFILE *(read-only)*
+# 8. Use MERGE Instead of CREATE
 
-**Data used by this section:** the customer `C1 Alice`, now reachable via the `customer_id_unique` index from Section 18.
+After creating the unique constraint, use `MERGE` instead of `CREATE`.
 
-### Query 1 — EXPLAIN
-
-**Explanation:** Shows the planned execution strategy **without running the query** — no rows come back, only the plan.
+Instead of:
 
 ```cypher
-// Plan only, does not execute
-EXPLAIN
-MATCH (c:Customer {customerId:"C1"})
-RETURN c;
+CREATE (:Person {
+    personId:"EMP001",
+    name:"Alice",
+    age:30,
+    city:"Atlanta"
+});
 ```
 
-**Result:** An execution plan (e.g. `NodeUniqueIndexSeek` on `customer_id_unique`) — **0 data rows**, since `EXPLAIN` never actually executes the query.
-
-### Query 2 — PROFILE
-
-**Explanation:** Runs the query for real **and** attaches runtime statistics (rows produced, DB hits, time per operator) to the same kind of plan.
+Use:
 
 ```cypher
-// Executes AND shows the plan + runtime stats
-PROFILE
-MATCH (c:Customer {customerId:"C1"})
-RETURN c;
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
 ```
 
-**Result:** 1 data row — `Customer {customerId:"C1", name:"Alice"}` — plus the annotated plan showing exactly how many DB hits the index seek took.
+---
 
+# 9. What MERGE Does
+
+```text
+MERGE
+  |
+  +-- Node already exists
+  |       |
+  |       +--> Use existing node
+  |
+  +-- Node does not exist
+          |
+          +--> Create new node
+```
+
+Example:
+
+```cypher
+MERGE (p:Person {personId:"EMP001"})
+RETURN p;
+```
+
+If `EMP001` already exists:
+
+```text
+No new node is created
+```
+
+If `EMP001` does not exist:
+
+```text
+New node is created
+```
+
+---
+
+# 10. CREATE vs MERGE
+
+| Cypher | Meaning |
+|---|---|
+| `CREATE` | Always creates a new node |
+| `MERGE` | Finds an existing node or creates it |
+| `SET` | Updates node properties |
+| `UNIQUE CONSTRAINT` | Prevents duplicate values |
+
+---
+
+# Snowflake / SQL Comparison
+
+```text
+SQL / Snowflake                 Neo4j
+-------------------------------------------------
+INSERT                          CREATE
+UPSERT                          MERGE
+UPDATE                          SET
+UNIQUE CONSTRAINT               UNIQUE CONSTRAINT
+```
+
+---
+
+# Important Difference
+
+## CREATE
+
+```cypher
+CREATE (:Person {personId:"EMP001"});
+```
+
+Run 3 times:
+
+```text
+EMP001
+EMP001
+EMP001
+```
+
+Three nodes may be created.
+
+---
+
+## MERGE
+
+```cypher
+MERGE (:Person {personId:"EMP001"});
+```
+
+Run 3 times:
+
+```text
+EMP001
+```
+
+Only one matching node is used.
+
+---
+
+# Recommended Neo4j Pattern
+
+## Step 1: Create Constraint Once
+
+```cypher
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
+```
+
+## Step 2: Use MERGE When Loading Data
+
+```cypher
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
+```
+
+---
+
+# Memory Trick
+
+```text
+CREATE
+= Always Create
+= Duplicate Possible
+
+MERGE
+= Match OR Create
+
+SET
+= Update
+
+UNIQUE CONSTRAINT
+= Duplicate Protection
+```
+
+---
+
+# Best Practice
+
+```text
+UNIQUE CONSTRAINT + MERGE
+```
+
+This is the safest pattern when a node ID must be unique.
+
+Example:
+
+```cypher
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
+
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
+```
 
 # Neo4j: 3 Simple and Common Ways to Remove Duplicate Nodes
 
@@ -2213,112 +2318,7 @@ Prevent future duplicates
 ```
 ---
 
-## 21. Database Objects — Admin, Schema, and Procedural *(read-only)*
 
-**Explanation:** These `SHOW` commands inspect the objects Neo4j maintains *around* your graph data — they don't touch nodes or relationships at all.
-
-### Query 1 — schema objects
-
-```cypher
-// Schema objects
-SHOW CONSTRAINTS;
-SHOW INDEXES;
-```
-
-**Result (at this point in the walkthrough):** 1 constraint (`customer_id_unique`) and 2 indexes (`customer_id_unique`'s backing index + `customer_name_index`) — exactly the state left behind by Sections 18–19.
-
-### Query 2 — admin / server objects
-
-```cypher
-// Admin / server objects
-SHOW DATABASES;
-SHOW USERS;
-SHOW ROLES;
-```
-
-**Result (typical fresh instance):**
-- `SHOW DATABASES` → `neo4j` (your default database) and `system` (Neo4j's internal metadata database) — always present.
-- `SHOW USERS` / `SHOW ROLES` → require Neo4j **Enterprise** edition or Aura; Community edition has no multi-user role-based security, so these commands aren't available there.
-
-### Query 3 — procedural objects
-
-```cypher
-// Procedural objects
-SHOW PROCEDURES;
-SHOW FUNCTIONS;
-```
-
-**Result:** a long built-in list (hundreds of rows) — e.g. `dbms.components`, `db.schema.visualization` among procedures, and `count()`, `labels()`, `collect()` among functions — plus any APOC procedures/functions if the APOC plugin is installed.
-
-**Scenario to notice:** run `SHOW INDEXES` before and after Section 19 to watch `customer_name_index` appear — same for `SHOW CONSTRAINTS` before/after Section 18.
-
----
-
-## Mini Project Recap — Customer / Product Graph *(read-only)*
-
-**Data used by this section:** the full purchase graph as of Section 13 — Alice (Laptop, Mouse), Bob (Laptop, Tennis Racket), Carol (Mouse), plus Diana and Ethan with zero purchases each.
-
-### Query 1 — products purchased by Alice
-
-```cypher
-// 1. Products purchased by Alice
-MATCH (:Customer {name:"Alice"})-[:PURCHASED]->(p:Product)
-RETURN p.name;
-```
-
-**Result:** `Laptop`, `Mouse`.
-
-### Query 2 — customers who purchased the Laptop
-
-```cypher
-// 2. Customers who purchased the Laptop
-MATCH (c:Customer)-[:PURCHASED]->(:Product {name:"Laptop"})
-RETURN c.name;
-```
-
-**Result:** `Alice`, `Bob`.
-
-### Query 3 — customers who purchased the same product as Alice
-
-**Explanation:** Walks from Alice to a product she bought, then back out to any *other* customer who also bought that same product.
-
-```cypher
-// 3. Customers who purchased the same product as Alice
-MATCH (alice:Customer {name:"Alice"})-[:PURCHASED]->(p:Product)<-[:PURCHASED]-(other:Customer)
-WHERE other <> alice
-RETURN DISTINCT other.name, p.name;
-```
-
-**Result:**
-
-| other.name | p.name |
-|---|---|
-| Bob | Laptop |
-| Carol | Mouse |
-
-### Query 4 — most purchased product
-
-```cypher
-// 4. Most purchased product
-MATCH (:Customer)-[:PURCHASED]->(p:Product)
-RETURN p.name, count(*) AS purchases
-ORDER BY purchases DESC
-LIMIT 1;
-```
-
-**Result:** **Either** `Laptop` **or** `Mouse` — both are tied at 2 purchases each (Laptop: Alice+Bob; Mouse: Alice+Carol). Tennis Racket has only 1.
-
-**Scenario to notice:** this is a genuine tie. `ORDER BY ... LIMIT 1` with no tiebreaker doesn't guarantee *which* of the tied rows comes back — a great interview point about why you should add a secondary `ORDER BY` key (or return all tied rows) whenever ties are possible.
-
----
-
-## Suggested Practice Order
-
-1. Run Section 0 (setup) once.
-2. Work through Sections 1–9 in order (CRUD basics) — each one changes the graph, so run them in sequence.
-3. Sections 10–17 are read-heavy and safe to run in any order, any number of times.
-4. Sections 18–20 (constraints/indexes/query plan) are best run last since they add schema objects.
-5. Re-run Section 0 from a clean database if you want to reset and repeat.
 
 ---
 
