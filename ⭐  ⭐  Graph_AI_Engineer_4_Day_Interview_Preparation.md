@@ -996,6 +996,635 @@ RETURN p.name, friendCount;
 
 **Result:** Alice(1), Bob(1), Carol(1) — all tied at 1 outgoing `KNOWS` edge each (order among ties is arbitrary). Dave doesn't appear at all — he has zero outgoing `KNOWS` relationships, so the initial `MATCH` never produces a row for him.
 
+
+# Neo4j `WITH` Clause — Different Scenarios
+
+`WITH` is one of the most important Cypher clauses because it lets you **pass data from one stage of the query to the next**.
+
+For a Snowflake / SQL developer, think of `WITH` as a mix of:
+
+```text
+CTE-like pipeline
+GROUP BY stage
+HAVING stage
+column projection
+aliasing
+intermediate result set
+```
+
+But it is **not exactly the same as a SQL CTE**.
+
+---
+
+# 1. Pass Variables to the Next Part of the Query
+
+```cypher
+MATCH (p:Person)
+WITH p
+WHERE p.age > 30
+RETURN p.name, p.age;
+```
+
+Flow:
+
+```text
+MATCH → WITH → WHERE → RETURN
+```
+
+---
+
+# 2. Rename a Variable
+
+```cypher
+MATCH (p:Person)
+WITH p.name AS personName
+RETURN personName;
+```
+
+Similar to SQL:
+
+```sql
+SELECT name AS personName
+```
+
+---
+
+# 3. Aggregation
+
+```cypher
+MATCH (p:Person)
+WITH p.city AS city, count(*) AS cnt
+RETURN city, cnt;
+```
+
+Example result:
+
+```text
+Atlanta   2
+Chicago   1
+Boston    1
+```
+
+This is similar to:
+
+```sql
+SELECT city, COUNT(*)
+FROM Person
+GROUP BY city;
+```
+
+---
+
+# 4. Filter After Aggregation
+
+This is the scenario used to find duplicates.
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, count(*) AS cnt
+WHERE cnt > 1
+RETURN personId, cnt;
+```
+
+SQL equivalent:
+
+```sql
+SELECT personId, COUNT(*)
+FROM Person
+GROUP BY personId
+HAVING COUNT(*) > 1;
+```
+
+Memory:
+
+```text
+SQL HAVING
+≈
+Cypher WITH + WHERE
+```
+
+---
+
+# 5. Calculate Values and Use Them Later
+
+```cypher
+MATCH (p:Person)
+WITH p, p.age + 5 AS futureAge
+RETURN p.name, futureAge;
+```
+
+Example:
+
+```text
+Alice   35
+Bob     40
+Carol   33
+Dave    46
+```
+
+---
+
+# 6. Filter Before Continuing to Another MATCH
+
+```cypher
+MATCH (p:Person)
+WITH p
+WHERE p.city = "Atlanta"
+
+MATCH (p)-[:WORKS_FOR]->(c:Company)
+RETURN p.name, c.name;
+```
+
+Meaning:
+
+```text
+Find people
+↓
+Keep only Atlanta people
+↓
+Then find their companies
+```
+
+This is very useful in multi-step graph queries.
+
+---
+
+# 7. Use WITH Between CREATE Operations
+
+Example:
+
+```cypher
+CREATE (p:Person {name:"Alice"})
+WITH p
+CREATE (c:Company {name:"OpenAI"})
+CREATE (p)-[:WORKS_FOR]->(c)
+RETURN p, c;
+```
+
+Here:
+
+```text
+WITH p
+```
+
+carries the newly created `Person` node into the next query stage.
+
+---
+
+# 8. Keep Only Specific Variables
+
+Suppose:
+
+```cypher
+MATCH (p:Person)-[r:WORKS_FOR]->(c:Company)
+WITH p, c
+RETURN p.name, c.name;
+```
+
+After:
+
+```cypher
+WITH p, c
+```
+
+the variable `r` is no longer available.
+
+This query will fail:
+
+```cypher
+MATCH (p:Person)-[r:WORKS_FOR]->(c:Company)
+WITH p, c
+RETURN r;
+```
+
+Because `r` was not passed through `WITH`.
+
+Memory:
+
+```text
+WITH controls variable scope
+```
+
+---
+
+# 9. DISTINCT
+
+```cypher
+MATCH (p:Person)
+WITH DISTINCT p.city AS city
+RETURN city;
+```
+
+Result:
+
+```text
+Atlanta
+Chicago
+Boston
+```
+
+Similar to SQL:
+
+```sql
+SELECT DISTINCT city
+FROM Person;
+```
+
+---
+
+# 10. ORDER BY Before the Next Stage
+
+```cypher
+MATCH (p:Person)
+WITH p
+ORDER BY p.age DESC
+RETURN p.name, p.age;
+```
+
+Or:
+
+```cypher
+MATCH (p:Person)
+WITH p
+ORDER BY p.age DESC
+LIMIT 2
+RETURN p.name, p.age;
+```
+
+Result:
+
+```text
+Dave   41
+Bob    35
+```
+
+---
+
+# 11. LIMIT Intermediate Results
+
+This is useful for performance.
+
+```cypher
+MATCH (p:Person)
+WITH p
+LIMIT 10
+
+MATCH (p)-[:KNOWS]->(friend)
+RETURN p.name, friend.name;
+```
+
+This limits the first stage before doing more graph traversal.
+
+---
+
+# 12. Collect Values Into a List
+
+```cypher
+MATCH (p:Person)
+WITH collect(p.name) AS names
+RETURN names;
+```
+
+Result:
+
+```text
+["Alice", "Bob", "Carol", "Dave"]
+```
+
+You can also group values:
+
+```cypher
+MATCH (p:Person)
+WITH p.city AS city, collect(p.name) AS people
+RETURN city, people;
+```
+
+Example:
+
+```text
+Atlanta   ["Alice", "Carol"]
+Chicago   ["Bob"]
+Boston    ["Dave"]
+```
+
+---
+
+# 13. UNWIND After WITH
+
+```cypher
+MATCH (p:Person)
+WITH collect(p.name) AS names
+UNWIND names AS name
+RETURN name;
+```
+
+Flow:
+
+```text
+rows
+↓
+collect
+↓
+list
+↓
+UNWIND
+↓
+rows again
+```
+
+---
+
+# 14. Conditional Calculations
+
+```cypher
+MATCH (p:Person)
+WITH p,
+     CASE
+       WHEN p.age >= 40 THEN "Senior"
+       WHEN p.age >= 30 THEN "Mid"
+       ELSE "Young"
+     END AS ageGroup
+RETURN p.name, ageGroup;
+```
+
+Example logic:
+
+```text
+Age >= 40  → Senior
+Age >= 30  → Mid
+Else       → Young
+```
+
+---
+
+# 15. Relationship Aggregation
+
+For a customer / product graph:
+
+```cypher
+MATCH (c:Customer)-[r:PURCHASED]->(p:Product)
+WITH c, sum(r.amount) AS totalSpent
+RETURN c.name, totalSpent;
+```
+
+Possible result:
+
+```text
+Alice   1250
+Bob     1280
+Carol   45
+```
+
+---
+
+# 16. Filter Customers Based on Aggregated Purchase Amount
+
+```cypher
+MATCH (c:Customer)-[r:PURCHASED]->(p:Product)
+WITH c, sum(r.amount) AS totalSpent
+WHERE totalSpent > 1000
+RETURN c.name, totalSpent;
+```
+
+SQL equivalent:
+
+```sql
+SELECT customer_id, SUM(amount)
+FROM purchases
+GROUP BY customer_id
+HAVING SUM(amount) > 1000;
+```
+
+---
+
+# 17. Sort Aggregated Values
+
+```cypher
+MATCH (c:Customer)-[r:PURCHASED]->(p:Product)
+WITH c, sum(r.amount) AS totalSpent
+ORDER BY totalSpent DESC
+RETURN c.name, totalSpent;
+```
+
+---
+
+# 18. Top-N Using WITH
+
+```cypher
+MATCH (c:Customer)-[r:PURCHASED]->(p:Product)
+WITH c, sum(r.amount) AS totalSpent
+ORDER BY totalSpent DESC
+LIMIT 2
+RETURN c.name, totalSpent;
+```
+
+This returns the top 2 customers by purchase amount.
+
+---
+
+# 19. Delete Duplicate Nodes Using WITH
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN tail(nodes) | DETACH DELETE n);
+```
+
+Here `WITH` is doing:
+
+```text
+GROUP BY personId
++
+collect nodes
++
+filter duplicate groups
+```
+
+Example:
+
+```text
+EMP001 → [node1, node2, node3]
+```
+
+Then:
+
+```text
+tail(nodes)
+```
+
+returns:
+
+```text
+[node2, node3]
+```
+
+So Neo4j keeps:
+
+```text
+node1
+```
+
+and deletes:
+
+```text
+node2
+node3
+```
+
+---
+
+# 20. Chaining Multiple Query Stages
+
+```cypher
+MATCH (p:Person)
+WITH p
+WHERE p.city = "Atlanta"
+
+MATCH (p)-[:KNOWS]->(friend)
+WITH p, friend
+WHERE friend.age > 30
+
+RETURN p.name, friend.name;
+```
+
+This shows the real power of `WITH`.
+
+Flow:
+
+```text
+Stage 1
+MATCH people
+
+Stage 2
+WITH + filter Atlanta
+
+Stage 3
+MATCH friends
+
+Stage 4
+WITH + filter age
+
+Stage 5
+RETURN
+```
+
+---
+
+# Best Memory Trick
+
+Think:
+
+```text
+WITH = PASS + PROCESS
+```
+
+`WITH` can:
+
+```text
+PASS variables
+PROCESS aggregation
+FILTER aggregated data
+RENAME columns/variables
+CALCULATE values
+SORT
+LIMIT
+COLLECT
+CONTROL scope
+```
+
+---
+
+# SQL / Snowflake vs Cypher WITH
+
+| SQL / Snowflake | Cypher |
+|---|---|
+| `SELECT column AS alias` | `WITH expression AS alias` |
+| `GROUP BY` | aggregation in `WITH` |
+| `HAVING` | `WITH ... WHERE` |
+| intermediate CTE result | `WITH` pipeline |
+| projection | `WITH` |
+| variable scope | `WITH` |
+| `ORDER BY` intermediate data | `WITH ... ORDER BY` |
+| `LIMIT` intermediate data | `WITH ... LIMIT` |
+
+---
+
+# Common Cypher Pattern
+
+A very common query structure is:
+
+```cypher
+MATCH ...
+WITH ...
+WHERE ...
+MATCH ...
+WITH ...
+RETURN ...
+```
+
+Think:
+
+```text
+MATCH
+↓
+WITH
+↓
+WHERE
+↓
+MATCH
+↓
+WITH
+↓
+RETURN
+```
+
+---
+
+# Quick Summary
+
+```text
+WITH p
+→ pass p to next stage
+
+WITH p.name AS name
+→ rename / project
+
+WITH p.city, count(*) AS cnt
+→ aggregate
+
+WITH ...
+WHERE ...
+→ filter aggregated/intermediate results
+
+WITH DISTINCT ...
+→ remove duplicates
+
+WITH ...
+ORDER BY ...
+→ sort intermediate data
+
+WITH ...
+LIMIT ...
+→ limit intermediate data
+
+WITH collect(...)
+→ create list
+
+WITH p, calculatedValue
+→ create reusable calculation
+
+WITH p, c
+→ control which variables remain available
+```
+
+---
+
+# One-Line Memory Rule
+
+```text
+WITH = Take the current result, process it, and pass selected values to the next part of the query.
+```
 ---
 
 ## 12. Aggregations *(read-only)*
@@ -1289,6 +1918,299 @@ RETURN c;
 
 **Result:** 1 data row — `Customer {customerId:"C1", name:"Alice"}` — plus the annotated plan showing exactly how many DB hits the index seek took.
 
+
+# Neo4j: 3 Simple and Common Ways to Remove Duplicate Nodes
+
+Suppose duplicate `Person` nodes exist based on:
+
+```text
+personId
+```
+
+Example:
+
+```text
+EMP001 → 3 nodes
+EMP002 → 2 nodes
+EMP003 → 1 node
+```
+
+---
+
+# Solution 1: `collect()` + `tail()`
+
+This is one of the simplest and most common approaches.
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN tail(nodes) | DETACH DELETE n);
+```
+
+## How it works
+
+```text
+collect(p)
+→ collects all nodes with same personId
+
+tail(nodes)
+→ skips the first node
+
+DETACH DELETE
+→ deletes remaining duplicate nodes
+```
+
+Example:
+
+```text
+EMP001 → [node1, node2, node3]
+
+Keep:
+node1
+
+Delete:
+node2
+node3
+```
+
+### Memory Trick
+
+```text
+COLLECT → TAIL → DELETE
+```
+
+---
+
+# Solution 2: `collect()` + List Slicing
+
+Instead of `tail(nodes)`, use:
+
+```text
+nodes[1..]
+```
+
+Query:
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN nodes[1..] | DETACH DELETE n);
+```
+
+## Meaning
+
+```text
+nodes[1..]
+```
+
+means:
+
+```text
+Start from the second node
+and take all remaining nodes
+```
+
+Example:
+
+```text
+nodes = [node1, node2, node3]
+
+nodes[1..]
+
+Result:
+[node2, node3]
+```
+
+Then Neo4j deletes:
+
+```text
+node2
+node3
+```
+
+and keeps:
+
+```text
+node1
+```
+
+### Memory Trick
+
+```text
+[1..]
+= Skip First
+```
+
+---
+
+# Solution 3: `UNWIND` + DELETE
+
+This is also very useful because `UNWIND` is commonly used in Neo4j.
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+UNWIND nodes[1..] AS duplicate
+DETACH DELETE duplicate;
+```
+
+## How it works
+
+```text
+collect()
+↓
+Creates list of duplicate nodes
+
+nodes[1..]
+↓
+Keeps only duplicates after first node
+
+UNWIND
+↓
+Converts list back into individual rows
+
+DETACH DELETE
+↓
+Deletes each duplicate node
+```
+
+Example:
+
+```text
+[node1, node2, node3]
+```
+
+After:
+
+```text
+nodes[1..]
+```
+
+becomes:
+
+```text
+[node2, node3]
+```
+
+After:
+
+```text
+UNWIND
+```
+
+becomes:
+
+```text
+node2
+node3
+```
+
+Then both are deleted.
+
+### Memory Trick
+
+```text
+COLLECT → SLICE → UNWIND → DELETE
+```
+
+---
+
+# Quick Comparison
+
+| Solution | Main Syntax | Easy to Remember |
+|---|---|---|
+| Solution 1 | `tail(nodes)` | Very Easy |
+| Solution 2 | `nodes[1..]` | Very Easy |
+| Solution 3 | `UNWIND nodes[1..]` | Useful for advanced queries |
+
+---
+
+# Recommended for Practice
+
+## Option 1 — Simplest
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN tail(nodes) | DETACH DELETE n);
+```
+
+## Option 2 — Easy Alternative
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN nodes[1..] | DETACH DELETE n);
+```
+
+## Option 3 — Learn `UNWIND`
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+UNWIND nodes[1..] AS duplicate
+DETACH DELETE duplicate;
+```
+
+---
+
+# Best Memory Rule
+
+```text
+Keep First Node
+Delete Remaining Nodes
+```
+
+The core logic is always:
+
+```text
+MATCH duplicates
+↓
+GROUP using WITH
+↓
+COLLECT nodes
+↓
+Keep first
+↓
+Delete the rest
+```
+
+---
+
+# After Removing Duplicates
+
+Create a unique constraint:
+
+```cypher
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
+```
+
+And use `MERGE` instead of `CREATE`:
+
+```cypher
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
+```
+
+## Final Memory Trick
+
+```text
+Remove existing duplicates
+→ COLLECT + TAIL / SLICE / UNWIND
+
+Prevent future duplicates
+→ UNIQUE CONSTRAINT + MERGE
+```
 ---
 
 ## 21. Database Objects — Admin, Schema, and Procedural *(read-only)*
