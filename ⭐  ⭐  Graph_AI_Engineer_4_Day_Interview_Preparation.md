@@ -183,6 +183,86 @@ CREATE (p)-[:WORKS_FOR]->(c);
 
 ---
 
+# Neo4j Cypher – Clause Order
+
+Cypher clauses generally follow this logical order in a query:
+
+```
+MATCH
+WHERE
+WITH
+  [ORDER BY]
+  [SKIP]
+  [LIMIT]
+RETURN
+  [ORDER BY]
+  [SKIP]
+  [LIMIT]
+```
+
+## 1. `MATCH`
+Finds the pattern (nodes/relationships) in the graph.
+```cypher
+MATCH (p:Person)-[:WORKS_AT]->(c:Company)
+```
+
+## 2. `WHERE`
+Filters the matched pattern (attached to `MATCH` or `WITH`, not standalone).
+```cypher
+WHERE p.age > 30
+```
+
+## 3. `WITH`
+Passes/aggregates specific variables to the next part of the query (acts like a pipe). You can chain `WHERE`, `ORDER BY`, `SKIP`, `LIMIT` after it.
+```cypher
+WITH p, c, count(*) AS cnt
+WHERE cnt > 1
+```
+
+## 4. `ORDER BY`
+Sorts the results (can appear after `WITH` or `RETURN`).
+```cypher
+ORDER BY p.age DESC
+```
+
+## 5. `SKIP`
+Skips a number of rows (pagination).
+```cypher
+SKIP 10
+```
+
+## 6. `LIMIT`
+Limits number of rows returned.
+```cypher
+LIMIT 5
+```
+
+## 7. `RETURN`
+Final projection of data sent back to the client.
+```cypher
+RETURN p.name, c.name
+```
+
+---
+
+## Full Example
+
+```cypher
+MATCH (p:Person)-[:WORKS_AT]->(c:Company)
+WHERE p.age > 30
+WITH p, c
+ORDER BY p.age DESC
+SKIP 10
+LIMIT 5
+RETURN p.name AS name, c.name AS company
+```
+
+### Key Notes
+- `WHERE` is **not a standalone clause** — it always modifies the preceding `MATCH`/`OPTIONAL MATCH`/`WITH`.
+- `WITH` is required whenever you want to filter/order/limit **before** doing another `MATCH` or before final `RETURN` — it's essentially a mini-`RETURN` mid-query.
+- `ORDER BY`, `SKIP`, `LIMIT` can be used **either** after `WITH` **or** after `RETURN` (or both, at different stages).
+- `SKIP`/`LIMIT` order relative to each other doesn't matter, but both come after `ORDER BY` when used together.
+
 ## 2. MATCH — basic retrieval *(read-only)*
 
 **Data used by this section:** 5 people exist at this point — Alice, Bob, Carol, Dave, Eve (Eve was added in Section 1). `WORKS_FOR`: Alice→OpenAI, Bob→Neo4j, Carol→OpenAI, Eve→Neo4j.
