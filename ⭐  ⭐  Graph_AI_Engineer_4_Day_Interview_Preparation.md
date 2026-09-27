@@ -161,6 +161,357 @@ CREATE (:Person {personId:"EMP005", name:"Eve", age:26, city:"Denver"});
 + Eve {personId:"EMP005", name:"Eve", age:26, city:"Denver"}   (no relationships)
 ```
 
+# Neo4j: Remove Duplicate Nodes and Make Them Unique
+
+If you executed the same `CREATE` statement multiple times, Neo4j may create duplicate nodes.
+
+Example:
+
+```cypher
+CREATE (:Person {
+    personId:"EMP001",
+    name:"Alice",
+    age:30,
+    city:"Atlanta"
+});
+```
+
+If you run this multiple times, Neo4j creates multiple `Person` nodes with the same `personId`.
+
+---
+
+# 1. Check for Duplicate Nodes
+
+Use:
+
+```cypher
+MATCH (p:Person)
+RETURN p.personId, count(*) AS count;
+```
+
+Example output:
+
+```text
+personId    count
+--------    -----
+EMP001      3
+EMP002      2
+EMP003      1
+```
+
+This means:
+
+```text
+EMP001 → 3 nodes exist
+EMP002 → 2 nodes exist
+EMP003 → only 1 node exists
+```
+
+---
+
+# 2. Remove Duplicate Nodes
+
+To keep one node and delete the remaining duplicates:
+
+```cypher
+MATCH (p:Person)
+WITH p.personId AS personId, collect(p) AS nodes
+WHERE size(nodes) > 1
+FOREACH (n IN tail(nodes) | DETACH DELETE n);
+```
+
+## How it works
+
+Suppose Neo4j has:
+
+```text
+EMP001 → [node1, node2, node3]
+```
+
+`collect(p)` creates a list:
+
+```text
+[node1, node2, node3]
+```
+
+`tail(nodes)` means:
+
+```text
+[node2, node3]
+```
+
+So Neo4j:
+
+```text
+Keeps   → node1
+Deletes → node2
+Deletes → node3
+```
+
+`DETACH DELETE` also removes any relationships connected to the duplicate nodes.
+
+---
+
+# 3. Verify That Duplicates Are Removed
+
+Run:
+
+```cypher
+MATCH (p:Person)
+RETURN p.personId, count(*) AS count;
+```
+
+Expected output:
+
+```text
+personId    count
+--------    -----
+EMP001      1
+EMP002      1
+EMP003      1
+EMP004      1
+```
+
+---
+
+# 4. Create a Unique Constraint
+
+Now create a constraint so Neo4j will not allow duplicate `personId` values in the future.
+
+```cypher
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
+```
+
+This means:
+
+```text
+Person.personId must always be unique
+```
+
+For example:
+
+```text
+EMP001 → allowed once
+
+EMP001 → second node NOT allowed
+```
+
+---
+
+# 5. Unique Constraint for Customer
+
+```cypher
+CREATE CONSTRAINT customer_id_unique IF NOT EXISTS
+FOR (c:Customer)
+REQUIRE c.customerId IS UNIQUE;
+```
+
+---
+
+# 6. Unique Constraint for Product
+
+```cypher
+CREATE CONSTRAINT product_id_unique IF NOT EXISTS
+FOR (p:Product)
+REQUIRE p.productId IS UNIQUE;
+```
+
+---
+
+# 7. Unique Constraint for Company
+
+```cypher
+CREATE CONSTRAINT company_id_unique IF NOT EXISTS
+FOR (c:Company)
+REQUIRE c.companyId IS UNIQUE;
+```
+
+---
+
+# 8. Use MERGE Instead of CREATE
+
+After creating the unique constraint, use `MERGE` instead of `CREATE`.
+
+Instead of:
+
+```cypher
+CREATE (:Person {
+    personId:"EMP001",
+    name:"Alice",
+    age:30,
+    city:"Atlanta"
+});
+```
+
+Use:
+
+```cypher
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
+```
+
+---
+
+# 9. What MERGE Does
+
+```text
+MERGE
+  |
+  +-- Node already exists
+  |       |
+  |       +--> Use existing node
+  |
+  +-- Node does not exist
+          |
+          +--> Create new node
+```
+
+Example:
+
+```cypher
+MERGE (p:Person {personId:"EMP001"})
+RETURN p;
+```
+
+If `EMP001` already exists:
+
+```text
+No new node is created
+```
+
+If `EMP001` does not exist:
+
+```text
+New node is created
+```
+
+---
+
+# 10. CREATE vs MERGE
+
+| Cypher | Meaning |
+|---|---|
+| `CREATE` | Always creates a new node |
+| `MERGE` | Finds an existing node or creates it |
+| `SET` | Updates node properties |
+| `UNIQUE CONSTRAINT` | Prevents duplicate values |
+
+---
+
+# Snowflake / SQL Comparison
+
+```text
+SQL / Snowflake                 Neo4j
+-------------------------------------------------
+INSERT                          CREATE
+UPSERT                          MERGE
+UPDATE                          SET
+UNIQUE CONSTRAINT               UNIQUE CONSTRAINT
+```
+
+---
+
+# Important Difference
+
+## CREATE
+
+```cypher
+CREATE (:Person {personId:"EMP001"});
+```
+
+Run 3 times:
+
+```text
+EMP001
+EMP001
+EMP001
+```
+
+Three nodes may be created.
+
+---
+
+## MERGE
+
+```cypher
+MERGE (:Person {personId:"EMP001"});
+```
+
+Run 3 times:
+
+```text
+EMP001
+```
+
+Only one matching node is used.
+
+---
+
+# Recommended Neo4j Pattern
+
+## Step 1: Create Constraint Once
+
+```cypher
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
+```
+
+## Step 2: Use MERGE When Loading Data
+
+```cypher
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
+```
+
+---
+
+# Memory Trick
+
+```text
+CREATE
+= Always Create
+= Duplicate Possible
+
+MERGE
+= Match OR Create
+
+SET
+= Update
+
+UNIQUE CONSTRAINT
+= Duplicate Protection
+```
+
+---
+
+# Best Practice
+
+```text
+UNIQUE CONSTRAINT + MERGE
+```
+
+This is the safest pattern when a node ID must be unique.
+
+Example:
+
+```cypher
+CREATE CONSTRAINT person_id_unique IF NOT EXISTS
+FOR (p:Person)
+REQUIRE p.personId IS UNIQUE;
+
+MERGE (p:Person {personId:"EMP001"})
+SET p.name = "Alice",
+    p.age = 30,
+    p.city = "Atlanta";
+```
+
 ### Query 2 — create a relationship between two existing nodes
 
 **Explanation:** `MATCH`es Eve and the Neo4j company (both must already exist), then `CREATE`s a `WORKS_FOR` edge between them.
