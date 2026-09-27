@@ -198,6 +198,13 @@ RETURN
   [ORDER BY]
   [SKIP]
   [LIMIT]
+
+(MATCH ... WHERE ...)+
+(WITH ... [WHERE] [ORDER BY] [SKIP] [LIMIT])*
+RETURN ... [ORDER BY] [SKIP] [LIMIT]
+
+i.e., MATCH/WHERE/WITH can repeat several times before the final RETURN.
+
 ```
 
 ## 1. `MATCH`
