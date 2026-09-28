@@ -1,8 +1,16 @@
-# APOC Complete Notes — Theory, Syntax, Practice & Interview Questions
+# APOC Complete Notes — Theory, Syntax, Practice & Interview Questions (Updated Edition)
 
 APOC = **A**wesome **P**rocedures **O**n **C**ypher. It's the most widely used Neo4j plugin: a library of hundreds of procedures and functions that fill in the gaps native Cypher doesn't cover — JSON/XML handling, bulk import/export, dynamic/parameterized Cypher, graph refactoring, batching, triggers, and more.
 
 All practice queries below reuse the **same dataset** as `Day1_Cypher_Practice_Queries.md` (Alice/Bob/Carol/Dave people, OpenAI/Neo4j companies, and the Customer→PURCHASED→Product mini graph), so you can run them in the same sandbox. A dedicated section near the end, **"APOC + Python"**, covers calling every one of these procedures from real application code using the official Neo4j Python driver — with production-style (real-time) examples and Python-specific practice questions.
+
+> ## ⚠️ Updated edition — reviewed against current Neo4j APOC docs (Sept 2026)
+>
+> Items marked **⚠️** below are deprecated, removed, or changed since older APOC versions. The consolidated list is in **Appendix A**.
+>
+> **Version awareness:** APOC 5.26 is the LTS line for Neo4j 5 (Cypher 5). APOC 2025.06+ pairs with Neo4j 2025.06+, which lets you choose **Cypher 5 or Cypher 25** — some procedures (e.g. the old `apoc.trigger.add`) still work under Cypher 5 but are **not available in Cypher 25**. Always check `RETURN apoc.version();` and read the docs for *your* version.
+>
+> **Biggest fixes vs. the old notes:** (1) triggers → `apoc.trigger.install/drop/...`, (2) `apoc.*` config settings now belong in `apoc.conf`, not `neo4j.conf`, (3) `apoc.text.join` and `apoc.date.format` are deprecated in favor of native Cypher, (4) native `CALL {} IN TRANSACTIONS` is now the first choice for batching.
 
 ---
 
@@ -24,8 +32,8 @@ Native Cypher is intentionally minimal. APOC fills real gaps:
 | No dynamic/parameterized labels or relationship types | `apoc.merge.node`, `apoc.create.relationship` |
 | No built-in JSON parsing/serialization | `apoc.convert.*` |
 | No CSV/JSON/JDBC bulk import | `apoc.load.*` |
-| No safe large-transaction batching | `apoc.periodic.iterate` |
-| No built-in database triggers | `apoc.trigger.*` |
+| Large-transaction batching (older gap — native `CALL {} IN TRANSACTIONS` now exists ⚠️) | `apoc.periodic.iterate` (still useful for parallel/retry) |
+| No built-in database triggers | `apoc.trigger.*` (⚠️ API changed — see §13) |
 | No easy schema/graph introspection | `apoc.meta.*` |
 | No node/relationship "refactoring" helpers | `apoc.refactor.*` |
 
@@ -33,13 +41,24 @@ Native Cypher is intentionally minimal. APOC fills real gaps:
 
 - **Neo4j Desktop / Aura:** APOC Core is usually pre-installed or a one-click plugin install.
 - **Self-managed (Docker, server):** drop the `apoc-<version>-core.jar` into the `plugins/` folder and restart.
-- Some procedures (file import/export, JSON APIs) require explicit config in `neo4j.conf`:
+- Some procedures (file import/export, JSON APIs) require explicit config. ⚠️ **Since Neo4j 5, `apoc.*` settings are no longer supported in `neo4j.conf`** — they go in a separate **`apoc.conf`** file (same folder as `neo4j.conf`, e.g. `neo4j/conf/`). `apoc.conf` is **not created automatically** — you create it yourself.
+
+`conf/neo4j.conf` (Neo4j's own setting — still lives here):
 
 ```text
 dbms.security.procedures.unrestricted=apoc.*
+```
+
+`conf/apoc.conf` (APOC settings — create the file if it doesn't exist):
+
+```text
 apoc.export.file.enabled=true
 apoc.import.file.enabled=true
 ```
+
+- Environment variables (e.g. Docker `--env`) also work and **override** `apoc.conf`.
+- By default, file paths are relative to the Neo4j import directory (`server.directories.import`), because `apoc.import.file.use_neo4j_config=true`. Set it to `false` in `apoc.conf` only if you truly need to read from anywhere on disk (security trade-off).
+- If you get *"Import from files not enabled, please set apoc.import.file.enabled=true in your apoc.conf"* — this is the fix.
 
 ## Interview Position (how to talk about APOC)
 
@@ -63,18 +82,18 @@ APOC's procedures and functions are organized into namespaces (think of these as
 | # | Namespace | Purpose |
 |---|---|---|
 | 1 | `apoc.coll.*` | List/collection utilities |
-| 2 | `apoc.text.*` | String utilities |
+| 2 | `apoc.text.*` | String utilities (⚠️ `apoc.text.join` deprecated) |
 | 3 | `apoc.convert.*` | JSON / type conversion |
 | 4 | `apoc.map.*` | Map (dictionary) utilities |
-| 5 | `apoc.date.*` / `apoc.temporal.*` | Date & time utilities |
+| 5 | `apoc.date.*` / `apoc.temporal.*` | Date & time utilities (⚠️ some deprecated in favor of native Cypher) |
 | 6 | `apoc.create.*` | Dynamic / virtual node & relationship creation |
 | 7 | `apoc.merge.*` | Dynamic MERGE (runtime label/type) |
 | 8 | `apoc.refactor.*` | Restructure existing graph data |
 | 9 | `apoc.path.*` | Path expansion / traversal helpers |
 | 10 | `apoc.load.*` | Import from JSON, CSV, JDBC, XML |
 | 11 | `apoc.export.*` | Export to JSON, CSV, Cypher, GraphML |
-| 12 | `apoc.periodic.*` | Batching, scheduling, background jobs |
-| 13 | `apoc.trigger.*` | Run Cypher automatically on data changes |
+| 12 | `apoc.periodic.*` | Batching, scheduling, background jobs (⚠️ native `CALL {} IN TRANSACTIONS` preferred for simple batching) |
+| 13 | `apoc.trigger.*` | Run Cypher automatically on data changes (⚠️ `install/drop/start/stop`, not `add/remove`) |
 | 14 | `apoc.meta.*` | Schema / graph introspection |
 | 15 | `apoc.schema.*` | Constraint/index inspection |
 | 16 | `apoc.algo.*` | Legacy graph algorithms (mostly superseded by GDS) |
@@ -161,8 +180,20 @@ RETURN apoc.text.levenshteinDistance("Neo4j", "Neo4J") AS distance;
 ```
 
 ```cypher
-// Clean/join text
+// ⚠️ DEPRECATED — the APOC docs mark apoc.text.join as deprecated
 RETURN apoc.text.join(["Neo4j", "Python", "AWS"], ", ") AS skillsLine;
+// -> "Neo4j, Python, AWS"
+```
+
+```cypher
+// ✅ Native replacement (APOC docs point to Cypher's string.join() — confirm it exists on your Neo4j version)
+RETURN string.join(["Neo4j", "Python", "AWS"], ", ") AS skillsLine;
+```
+
+```cypher
+// ✅ Version-safe native alternative (works on any Neo4j 5 — no extra function needed)
+WITH ["Neo4j", "Python", "AWS"] AS skills
+RETURN reduce(line = head(skills), s IN tail(skills) | line + ", " + s) AS skillsLine;
 // -> "Neo4j, Python, AWS"
 ```
 
@@ -254,19 +285,29 @@ Neo4j has native `date()`, `datetime()`, `duration()` functions, but APOC adds c
 ## Syntax & Examples
 
 ```cypher
-// Convert an epoch timestamp (ms) to a formatted date string
+// ⚠️ DEPRECATED — apoc.date.format is marked deprecated in the APOC docs (they point to native Cypher formatting)
 RETURN apoc.date.format(1735689600000, "ms", "yyyy-MM-dd") AS formatted;
+// -> "2025-01-01"
+
+// ✅ Native equivalent (epoch millis -> date string)
+RETURN toString(date(datetime({epochMillis: 1735689600000}))) AS formatted;
+// -> "2025-01-01"
 ```
 
 ```cypher
-// Parse a formatted string into epoch millis
+// Parse a formatted string into epoch millis (APOC version — check the docs page for your version's status)
 RETURN apoc.date.parse("2026-09-25", "ms", "yyyy-MM-dd") AS epochMillis;
+
+// ✅ Native equivalent (date string -> epoch millis; assumes UTC unless your default timezone differs)
+RETURN datetime({date: date("2026-09-25")}).epochMillis AS epochMillis;
 ```
+
+> ⚠️ Also note: `apoc.date.parseAsZonedDateTime` was **removed** in APOC 5.0 → use `apoc.temporal.toZonedTemporal(...)`, and `apoc.date.expire` / `expireIn` were removed → use `apoc.ttl.expire` / `apoc.ttl.expireIn`.
 
 ### Memory Trick
 
 ```text
-apoc.date = epoch <-> human-readable date, when native date()/datetime() isn't enough
+apoc.date = epoch <-> human-readable date. Prefer native date()/datetime() first; APOC only when native can't do it — and check deprecation status before relying on it.
 ```
 
 ---
@@ -500,33 +541,111 @@ CALL apoc.periodic.repeat(
 apoc.periodic.iterate = "big job? break it into small batched transactions"
 ```
 
+## ⚠️ Native Alternative — `CALL {} IN TRANSACTIONS`
+
+Neo4j 5 introduced batching natively in Cypher, so `apoc.periodic.iterate` is no longer the only answer. (The old APOC `rock_n_roll` procedures were removed in APOC 5.0 with exactly this native replacement in mind.)
+
+```cypher
+// Neo4j Browser needs :auto for CALL ... IN TRANSACTIONS
+:auto
+MATCH (c:Customer)
+CALL (c) {                       // scope clause syntax — Neo4j 5.23+
+  SET c.migrated = true
+} IN TRANSACTIONS OF 1000 ROWS;
+```
+
+```cypher
+// Older Neo4j 5.x syntax (importing WITH)
+:auto
+MATCH (c:Customer)
+CALL {
+  WITH c
+  SET c.migrated = true
+} IN TRANSACTIONS OF 1000 ROWS;
+```
+
+**When to use which (good interview answer):**
+
+| Situation | Choice |
+|---|---|
+| Simple batched write, want zero plugin dependency | Native `CALL {} IN TRANSACTIONS` |
+| Need built-in retries, per-batch error reporting (`errorMessages`), or `parallel: true` on older versions | `apoc.periodic.iterate` |
+| Managed environment where APOC isn't available | Native |
+
 ---
 
 # 13. `apoc.trigger.*` — Database Triggers
 
 ## Theory
 
-Neo4j core has no built-in trigger system. `apoc.trigger` lets you register Cypher that runs automatically whenever nodes/relationships of a certain shape are created, updated, or deleted — useful for maintaining derived properties or audit logs.
+Neo4j core has no built-in trigger system. `apoc.trigger` lets you register Cypher that runs automatically whenever nodes/relationships are created, updated, or deleted — useful for maintaining derived properties or audit logs.
 
-## Syntax & Examples
+> ⚠️ **The trigger API changed.** The old `apoc.trigger.add / remove / removeAll / pause / resume` are **deprecated in Cypher 5 and removed in Cypher 25** (removed from APOC Core in APOC 2025.06; they can still be used under Cypher 5). They were not designed for clusters. The replacements take the **database name as the first argument** and are applied "eventually" (asynchronously, cluster-safe).
+
+## Enable Triggers First
+
+Triggers are **disabled by default**. Add to `apoc.conf` (not `neo4j.conf`) and restart:
+
+```text
+apoc.trigger.enabled=true
+apoc.trigger.refresh=60000
+```
+
+## Syntax & Examples (current API)
 
 ```cypher
-CALL apoc.trigger.add(
-  "set-updated-timestamp",
+// ✅ Install a trigger: (databaseName, name, statement, selector, config)
+CALL apoc.trigger.install(
+  "neo4j",
+  "set-created-timestamp",
   "UNWIND $createdNodes AS n SET n.createdAt = datetime()",
-  {phase: "before"}
+  {phase: "before"},
+  {}
 );
 ```
 
 ```cypher
-// List installed triggers
+// List triggers installed for the current session database
 CALL apoc.trigger.list();
+
+// Show triggers for a specific database (from the system database)
+CALL apoc.trigger.show("neo4j");
 ```
+
+```cypher
+// Pause / resume a trigger
+CALL apoc.trigger.stop("neo4j", "set-created-timestamp");
+CALL apoc.trigger.start("neo4j", "set-created-timestamp");
+
+// Remove one trigger / all triggers for a database
+CALL apoc.trigger.drop("neo4j", "set-created-timestamp");
+CALL apoc.trigger.dropAll("neo4j");
+```
+
+**Selector phases:** `before` (inside the transaction, before commit), `after` (after commit), `afterAsync` (after commit, asynchronous), `rollback`. Inside the statement you can use parameters such as `$createdNodes`, `$deletedNodes`, `$assignedNodeProperties`.
+
+## Old → New Mapping
+
+| ⚠️ Deprecated / removed in Cypher 25 | ✅ Use instead |
+|---|---|
+| `apoc.trigger.add(name, stmt, selector [, config])` | `apoc.trigger.install(db, name, stmt, selector, config)` |
+| `apoc.trigger.remove(name)` | `apoc.trigger.drop(db, name)` |
+| `apoc.trigger.removeAll()` | `apoc.trigger.dropAll(db)` |
+| `apoc.trigger.pause(name)` | `apoc.trigger.stop(db, name)` |
+| `apoc.trigger.resume(name)` | `apoc.trigger.start(db, name)` |
+| `apoc.trigger.list()` | still valid; `apoc.trigger.show(db)` for a specific database |
+
+## Interview Points
+
+- Triggers in the `before` phase run **inside** the user's transaction — keep them light, or they slow every write.
+- `install` is *eventual*: the trigger may take a moment (refresh interval) to become active — don't assume it fires on the very next statement.
+- If asked "how would you audit changes without triggers?" — mention application-level logic or Neo4j's Change Data Capture (CDC) as alternatives.
 
 ### Memory Trick
 
 ```text
-apoc.trigger = "run this Cypher automatically whenever data changes"
+add → install   |  remove → drop  |  removeAll → dropAll  |  pause → stop  |  resume → start
+New API = database name FIRST.  Enable with apoc.trigger.enabled=true in apoc.conf.
 ```
 
 ---
@@ -597,6 +716,15 @@ CALL apoc.algo.dijkstra(a, d, "KNOWS", "weight")
 YIELD path, weight
 RETURN path, weight;
 ```
+
+> ⚠️ **Notes:** (1) `apoc.algo.dijkstraWithDefaultWeight` was **removed** in APOC 5.0 — use `apoc.algo.dijkstra(start, end, 'REL', 'weightProp', defaultWeight, numberOfWantedPaths)`. (2) The sample `KNOWS` relationships in this dataset have **no `weight` property**, so pass a default weight if you run the example:
+>
+> ```cypher
+> MATCH (a:Person {name:"Alice"}), (d:Person {name:"Dave"})
+> CALL apoc.algo.dijkstra(a, d, "KNOWS", "weight", 1.0)
+> YIELD path, weight
+> RETURN path, weight;
+> ```
 
 ### Interview Trap
 
@@ -851,6 +979,18 @@ RETURN batches, total, errorMessages;
 
 This runs the writes in small, separate transactions instead of one massive one, avoiding memory blowups and long lock contention.
 
+⚠️ **Modern alternative:** on Neo4j 5+ you can do the same natively, with no plugin:
+
+```cypher
+:auto
+MATCH (c:Customer)
+CALL (c) {
+  SET c.migrated = true
+} IN TRANSACTIONS OF 1000 ROWS;
+```
+
+Interview answer: *"I'd use native `CALL {} IN TRANSACTIONS` by default, and reach for `apoc.periodic.iterate` when I need its retry/error-reporting options or I'm on an older setup."*
+
 ---
 
 ## Q6. How do you rename a relationship type in Neo4j? Can Cypher do this natively?
@@ -897,7 +1037,9 @@ Neo4j property values can only be primitives or lists of primitives — you cann
 
 ## Q13. Does Neo4j support database triggers natively? How do you get similar behavior?
 
-No native trigger system exists in core Neo4j. `apoc.trigger.add(name, statement, config)` registers Cypher that runs automatically before/after node or relationship changes — for example, auto-stamping a `createdAt` timestamp on every new node.
+No native trigger system exists in core Neo4j. APOC provides one: `apoc.trigger.install(databaseName, name, statement, selector, config)` registers Cypher that runs automatically before/after node or relationship changes — for example, auto-stamping a `createdAt` timestamp on every new node.
+
+⚠️ The older `apoc.trigger.add(name, statement, selector)` (plus `remove`, `removeAll`, `pause`, `resume`) is **deprecated in Cypher 5 and removed in Cypher 25**; use `install`, `drop`, `dropAll`, `stop`, `start` instead. Triggers must also be enabled with `apoc.trigger.enabled=true` in `apoc.conf`.
 
 ---
 
@@ -1211,23 +1353,98 @@ ingest_purchase_event(driver, '{"customerId":"C2","productId":"P2","amount":25}'
 
 ---
 
+# Appendix A — Deprecated, Removed & Changed Items ⚠️
+
+Reviewed against the official Neo4j APOC docs ("Deprecations and additions", per-procedure pages, config and Cypher-version pages), Sept 2026.
+
+## A.1 Triggers (deprecated in Cypher 5, removed in Cypher 25)
+
+| Old | New |
+|---|---|
+| `apoc.trigger.add` | `apoc.trigger.install(db, name, stmt, selector, config)` |
+| `apoc.trigger.remove` | `apoc.trigger.drop(db, name)` |
+| `apoc.trigger.removeAll` | `apoc.trigger.dropAll(db)` |
+| `apoc.trigger.pause` | `apoc.trigger.stop(db, name)` |
+| `apoc.trigger.resume` | `apoc.trigger.start(db, name)` |
+
+## A.2 Deprecated — use native Cypher
+
+| Deprecated | Replacement |
+|---|---|
+| `apoc.text.join(list, delim)` | `string.join(list, delim)` per APOC docs (verify on your version), or a `reduce(...)` fallback |
+| `apoc.date.format(...)` | Native Cypher date/time formatting, e.g. `toString(date(datetime({epochMillis: ms})))` |
+| `apoc.create.uuid()` | `randomUUID()` |
+| `apoc.create.uuids(n)` | `UNWIND range(1, n) AS row RETURN row, randomUUID() AS uuid` (also not available in Cypher 25) |
+| `apoc.custom.declareFunction` / `declareProcedure` | `apoc.custom.installFunction` / `installProcedure` |
+| `apoc.custom.removeFunction` / `removeProcedure` | `apoc.custom.dropFunction` / `dropProcedure` |
+
+## A.3 Removed in APOC 5.0 (old name → replacement)
+
+| Removed | Replacement |
+|---|---|
+| `apoc.periodic.rock_n_roll`, `rock_n_roll_while` | `CALL {} IN TRANSACTIONS OF n ROWS` |
+| `apoc.export.cypherAll / cypherData / cypherGraph / cypherQuery` | `apoc.export.cypher.all / data / graph / query` |
+| `apoc.meta.type / types / isType / typeName` | `apoc.meta.cypher.type / types / isType` |
+| `apoc.math.round(...)` | native `round(value, precision)` |
+| `apoc.coll.reverse(list)` | native `reverse(list)` |
+| `apoc.date.expire / expireIn` | `apoc.ttl.expire / expireIn` |
+| `apoc.date.parseAsZonedDateTime` | `apoc.temporal.toZonedTemporal` |
+| `apoc.algo.dijkstraWithDefaultWeight` | `apoc.algo.dijkstra(..., defaultValue, numberOfWantedResults)` |
+| `apoc.refactor.cloneNodesWithRelationships` | `apoc.refactor.cloneNodes(nodes, true, skipProperties)` |
+| `apoc.create.vPattern / vPatternFull` | `apoc.create.virtualPath` |
+| `apoc.xml.import` | `apoc.import.xml` |
+| `apoc.mongodb.*` | `apoc.mongo.*` |
+| `apoc.load.jdbcParams` | `apoc.load.jdbc(urlOrKey, '', [params])` |
+| `apoc.cypher.runFirstColumn` | `apoc.cypher.runFirstColumnMany` / `runFirstColumnSingle` |
+
+## A.4 Configuration changes
+
+| Old habit | Current |
+|---|---|
+| `apoc.*` settings in `neo4j.conf` | Put all `apoc.*` settings in **`conf/apoc.conf`** (Neo4j 5+) or environment variables |
+| `apoc.initializer.cypher` | Removed — use database-specific `apoc.initializer.<databaseName>` |
+| Triggers "just work" | Must set `apoc.trigger.enabled=true` |
+
+## A.5 Checked and still current
+
+`apoc.coll.toSet`, `apoc.convert.toJson`, `apoc.convert.fromJsonMap`, `apoc.convert.fromJsonList`, and `apoc.periodic.iterate` are all still listed in the current docs (`iterate` is not deprecated, though native `CALL {} IN TRANSACTIONS` is often the better first choice).
+
+## A.6 Not individually verified
+
+I did **not** check each of these one by one: `apoc.refactor.setType`, `apoc.create.addLabels`, `apoc.util.validate`, `apoc.load.*`, `apoc.meta.stats` / `apoc.meta.schema`, `apoc.merge.node`, `apoc.schema.nodes`, `apoc.map.*`, `apoc.path.expandConfig`. No deprecation was found for them, but confirm on the docs page for your APOC version before relying on them in an interview or production.
+
+**How to verify quickly:**
+
+```cypher
+RETURN apoc.version();          // which APOC build is installed
+CALL apoc.help("trigger");      // list what your install actually exposes
+```
+
+Then check the procedure's own page in the APOC docs (deprecated ones carry a notice at the top).
+
+## A.7 Interview soundbite
+
+> "APOC has evolved with Neo4j 5 and Cypher 25 — I check the deprecation list for the version I'm on. For example, I use `apoc.trigger.install` rather than the old `apoc.trigger.add`, native `CALL {} IN TRANSACTIONS` for simple batching, and native Cypher functions where APOC ones have been deprecated."
+
+---
+
 # Quick Reference Cheat Sheet
 
 | Need to... | Use |
 |---|---|
 | Deduplicate / intersect / diff lists | `apoc.coll.*` |
-| Clean up or compare strings | `apoc.text.*` |
+| Clean up or compare strings | `apoc.text.*` ⚠️ (`join` deprecated) |
 | Convert between JSON and Cypher maps/lists | `apoc.convert.*` |
 | Merge/filter maps | `apoc.map.*` |
-| Convert epoch <-> formatted date | `apoc.date.*` |
+| Convert epoch <-> formatted date | Native `date()` / `datetime()` first; `apoc.date.*` ⚠️ (some deprecated) |
 | Create a node/relationship with a runtime label/type | `apoc.create.*` |
 | Find-or-create with a runtime label | `apoc.merge.*` |
 | Rename a relationship type / merge duplicate nodes | `apoc.refactor.*` |
 | Traverse with fine-grained filters/depth | `apoc.path.expandConfig` |
 | Import CSV/JSON/JDBC/XML | `apoc.load.*` |
 | Export to CSV/JSON/Cypher/GraphML | `apoc.export.*` |
-| Safely batch a huge write | `apoc.periodic.iterate` |
-| Run Cypher automatically on data changes | `apoc.trigger.*` |
+| Safely batch a huge write | Native `CALL {} IN TRANSACTIONS` first; `apoc.periodic.iterate` for retries / parallel |
+| Run Cypher automatically on data changes | `apoc.trigger.install / drop / start / stop` ⚠️ (not `add`) |
 | Inspect graph/schema shape | `apoc.meta.*`, `apoc.schema.*` |
 | Legacy graph algorithms (prefer GDS instead) | `apoc.algo.*` |
 | Validate / log inside a query | `apoc.util.*`, `apoc.log.*` |
