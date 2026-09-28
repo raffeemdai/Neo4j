@@ -32,6 +32,579 @@ Each item below is a **Question** followed by a **corrected Answer** for current
 | 11.9, 11.10 | 🔧 | `NOT EXISTS (p.born)` | `p.born IS NULL` |
 | 13.1 | 🐞 | "View query plan" but no `EXPLAIN` | Add `EXPLAIN` |
 
+
+# Neo4j Movies Sample Graph – Cypher Practice Data
+
+This script creates a sample **Movies graph** for practicing Neo4j Cypher queries.
+
+## Graph Model
+
+### Node Labels
+- `Person`
+- `Movie`
+
+### Relationship Types
+- `ACTED_IN`
+- `DIRECTED`
+- `WROTE`
+- `PRODUCED`
+- `REVIEWED`
+- `FOLLOWS`
+
+---
+
+## Optional – Clear Existing Database
+
+> Uncomment this query if you want to delete all existing nodes and relationships.
+
+```cypher
+MATCH (n)
+DETACH DELETE n;
+```
+
+---
+
+# 1. Create Person Nodes
+
+```cypher
+UNWIND [
+  {name: 'Keanu Reeves', born: 1964},
+  {name: 'Laurence Fishburne', born: 1961},
+  {name: 'Carrie-Anne Moss', born: 1967},
+  {name: 'Hugo Weaving', born: 1960},
+  {name: 'Lilly Wachowski', born: 1967},
+  {name: 'Lana Wachowski', born: 1965},
+  {name: 'Joel Silver', born: 1952},
+  {name: 'Dina Meyer', born: 1968},
+  {name: 'Robert Longo', born: 1953},
+  {name: 'Gene Hackman', born: 1930},
+  {name: 'Brooke Langton', born: 1970},
+  {name: 'Orlando Jones', born: 1968},
+  {name: 'Howard Deutch', born: 1950},
+  {name: 'Al Pacino', born: 1940},
+  {name: 'Charlize Theron', born: 1975},
+  {name: 'Taylor Hackford', born: 1944},
+  {name: 'Tom Cruise', born: 1962},
+  {name: 'Jack Nicholson', born: 1937},
+  {name: 'Demi Moore', born: 1962},
+  {name: 'Kevin Bacon', born: 1958},
+  {name: 'James Marshall', born: 1967},
+  {name: 'Rob Reiner', born: 1947},
+  {name: 'Aaron Sorkin', born: 1961},
+  {name: 'Tom Skerritt', born: 1933},
+  {name: 'Val Kilmer', born: 1959},
+  {name: 'Kelly McGillis', born: 1957},
+  {name: 'Tony Scott', born: 1944},
+  {name: 'Cuba Gooding Jr.', born: 1968},
+  {name: 'Renee Zellweger', born: 1969},
+  {name: 'Cameron Crowe', born: 1957},
+  {name: 'Tom Hanks', born: 1956},
+  {name: 'Gary Sinise', born: 1955},
+  {name: 'Bill Paxton', born: 1955},
+  {name: 'Ron Howard', born: 1954},
+  {name: 'Brian Grazer', born: 1951},
+  {name: 'Liv Tyler', born: 1977},
+  {name: 'Tom Everett Scott', born: 1970},
+  {name: 'Helen Hunt', born: 1963},
+  {name: 'Robert Zemeckis', born: 1952},
+  {name: 'Audrey Tautou', born: 1976},
+  {name: 'Ian McKellen', born: 1939},
+  {name: 'Emile Hirsch', born: 1985},
+  {name: 'Susan Sarandon', born: 1946},
+  {name: 'Matthew Fox', born: 1966},
+  {name: 'Christina Ricci', born: 1980},
+  {name: 'Robin Williams', born: 1951},
+  {name: 'Monica Potter', born: 1971},
+  {name: 'Tom Shadyac', born: 1958},
+  {name: 'Jessica Thompson'},
+  {name: 'James Thompson'},
+  {name: 'Angela Scope'},
+  {name: 'Paul Blythe'}
+] AS row
+
+MERGE (p:Person {name: row.name})
+SET p += row;
+```
+
+---
+
+# 2. Create Movie Nodes
+
+```cypher
+UNWIND [
+  {
+    title: 'The Matrix',
+    released: 1999,
+    tagline: 'Reality is not what it seems'
+  },
+  {
+    title: 'The Matrix Reloaded',
+    released: 2003,
+    tagline: 'The fight for the real world continues'
+  },
+  {
+    title: 'The Matrix Revolutions',
+    released: 2003,
+    tagline: 'The final battle for both worlds'
+  },
+  {
+    title: 'Johnny Mnemonic',
+    released: 1995,
+    tagline: 'A courier with a head full of secrets'
+  },
+  {
+    title: 'The Replacements',
+    released: 2000,
+    tagline: 'Second-string players, first-class heart'
+  },
+  {
+    title: 'The Devil\'s Advocate',
+    released: 1997,
+    tagline: 'Ambition has a price'
+  },
+  {
+    title: 'A Few Good Men',
+    released: 1992,
+    tagline: 'The truth is worth fighting for'
+  },
+  {
+    title: 'Top Gun',
+    released: 1986,
+    tagline: 'Fast jets, faster egos'
+  },
+  {
+    title: 'Jerry Maguire',
+    released: 2000,
+    tagline: 'A sports agent finds love and a conscience'
+  },
+  {
+    title: 'Apollo 13',
+    released: 1995,
+    tagline: 'A mission that became a fight to get home'
+  },
+  {
+    title: 'That Thing You Do!',
+    released: 1996,
+    tagline: 'One hit wonder, one unforgettable summer'
+  },
+  {
+    title: 'Cast Away',
+    released: 2000,
+    tagline: 'Stranded, and learning to survive'
+  },
+  {
+    title: 'The Polar Express',
+    released: 2004,
+    tagline: 'All aboard for a magical night'
+  },
+  {
+    title: 'The Da Vinci Code',
+    released: 2006,
+    tagline: 'Ancient secrets, modern danger'
+  },
+  {
+    title: 'Speed Racer',
+    released: 2008,
+    tagline: 'Racing for family and glory'
+  },
+  {
+    title: 'Patch Adams',
+    released: 1998,
+    tagline: 'Medicine needs a little more love and laughter'
+  }
+] AS row
+
+MERGE (m:Movie {title: row.title})
+SET m += row;
+```
+
+---
+
+# 3. Create ACTED_IN Relationships
+
+```cypher
+UNWIND [
+  {p: 'Keanu Reeves', m: 'The Matrix', roles: ['Neo']},
+  {p: 'Laurence Fishburne', m: 'The Matrix', roles: ['Morpheus']},
+  {p: 'Carrie-Anne Moss', m: 'The Matrix', roles: ['Trinity']},
+  {p: 'Hugo Weaving', m: 'The Matrix', roles: ['Agent Smith']},
+
+  {p: 'Keanu Reeves', m: 'The Matrix Reloaded', roles: ['Neo']},
+  {p: 'Laurence Fishburne', m: 'The Matrix Reloaded', roles: ['Morpheus']},
+  {p: 'Carrie-Anne Moss', m: 'The Matrix Reloaded', roles: ['Trinity']},
+  {p: 'Hugo Weaving', m: 'The Matrix Reloaded', roles: ['Agent Smith']},
+
+  {p: 'Keanu Reeves', m: 'The Matrix Revolutions', roles: ['Neo']},
+  {p: 'Laurence Fishburne', m: 'The Matrix Revolutions', roles: ['Morpheus']},
+  {p: 'Carrie-Anne Moss', m: 'The Matrix Revolutions', roles: ['Trinity']},
+  {p: 'Hugo Weaving', m: 'The Matrix Revolutions', roles: ['Agent Smith']},
+
+  {p: 'Keanu Reeves', m: 'Johnny Mnemonic', roles: ['Johnny Mnemonic']},
+  {p: 'Dina Meyer', m: 'Johnny Mnemonic', roles: ['Jane']},
+
+  {p: 'Keanu Reeves', m: 'The Replacements', roles: ['Shane Falco']},
+  {p: 'Gene Hackman', m: 'The Replacements', roles: ['Jimmy McGinty']},
+  {p: 'Brooke Langton', m: 'The Replacements', roles: ['Annabelle Farrell']},
+  {p: 'Orlando Jones', m: 'The Replacements', roles: ['Clifford Franklin']},
+
+  {p: 'Keanu Reeves', m: 'The Devil\'s Advocate', roles: ['Kevin Lomax']},
+  {p: 'Al Pacino', m: 'The Devil\'s Advocate', roles: ['John Milton']},
+  {p: 'Charlize Theron', m: 'The Devil\'s Advocate', roles: ['Mary Ann Lomax']},
+
+  {p: 'Tom Cruise', m: 'A Few Good Men', roles: ['Lt. Daniel Kaffee']},
+  {p: 'Jack Nicholson', m: 'A Few Good Men', roles: ['Col. Nathan R. Jessup']},
+  {p: 'Demi Moore', m: 'A Few Good Men', roles: ['Lt. Cdr. JoAnne Galloway']},
+  {p: 'Kevin Bacon', m: 'A Few Good Men', roles: ['Capt. Jack Ross']},
+  {p: 'James Marshall', m: 'A Few Good Men', roles: ['Pfc. Louden Downey']},
+
+  {p: 'Tom Cruise', m: 'Top Gun', roles: ['Maverick']},
+  {p: 'Tom Skerritt', m: 'Top Gun', roles: ['Viper']},
+  {p: 'Val Kilmer', m: 'Top Gun', roles: ['Iceman']},
+  {p: 'Kelly McGillis', m: 'Top Gun', roles: ['Charlie']},
+
+  {p: 'Tom Cruise', m: 'Jerry Maguire', roles: ['Jerry Maguire']},
+  {p: 'Cuba Gooding Jr.', m: 'Jerry Maguire', roles: ['Rod Tidwell']},
+  {p: 'Renee Zellweger', m: 'Jerry Maguire', roles: ['Dorothy Boyd']},
+
+  {p: 'Tom Hanks', m: 'Apollo 13', roles: ['Jim Lovell']},
+  {p: 'Gary Sinise', m: 'Apollo 13', roles: ['Ken Mattingly']},
+  {p: 'Kevin Bacon', m: 'Apollo 13', roles: ['Jack Swigert']},
+  {p: 'Bill Paxton', m: 'Apollo 13', roles: ['Fred Haise']},
+
+  {p: 'Tom Hanks', m: 'That Thing You Do!', roles: ['Mr. White']},
+  {p: 'Liv Tyler', m: 'That Thing You Do!', roles: ['Faye Dolan']},
+  {p: 'Tom Everett Scott', m: 'That Thing You Do!', roles: ['Guy Patterson']},
+
+  {p: 'Tom Hanks', m: 'Cast Away', roles: ['Chuck Noland']},
+  {p: 'Helen Hunt', m: 'Cast Away', roles: ['Kelly Frears']},
+
+  {
+    p: 'Tom Hanks',
+    m: 'The Polar Express',
+    roles: ['Hero Boy\'s Father', 'Conductor']
+  },
+
+  {p: 'Tom Hanks', m: 'The Da Vinci Code', roles: ['Robert Langdon']},
+  {p: 'Audrey Tautou', m: 'The Da Vinci Code', roles: ['Sophie Neveu']},
+  {p: 'Ian McKellen', m: 'The Da Vinci Code', roles: ['Sir Leigh Teabing']},
+
+  {p: 'Emile Hirsch', m: 'Speed Racer', roles: ['Speed Racer']},
+  {p: 'Susan Sarandon', m: 'Speed Racer', roles: ['Mom Racer']},
+  {p: 'Matthew Fox', m: 'Speed Racer', roles: ['Racer X']},
+  {p: 'Christina Ricci', m: 'Speed Racer', roles: ['Trixie']},
+
+  {p: 'Robin Williams', m: 'Patch Adams', roles: ['Patch Adams']},
+  {p: 'Monica Potter', m: 'Patch Adams', roles: ['Carin Fisher']}
+] AS row
+
+MATCH
+  (p:Person {name: row.p}),
+  (m:Movie {title: row.m})
+
+MERGE (p)-[a:ACTED_IN]->(m)
+
+SET a.roles = row.roles;
+```
+
+---
+
+# 4. Create DIRECTED Relationships
+
+```cypher
+UNWIND [
+  ['Lilly Wachowski', 'The Matrix'],
+  ['Lana Wachowski', 'The Matrix'],
+  ['Lilly Wachowski', 'The Matrix Reloaded'],
+  ['Lana Wachowski', 'The Matrix Reloaded'],
+  ['Lilly Wachowski', 'The Matrix Revolutions'],
+  ['Lana Wachowski', 'The Matrix Revolutions'],
+  ['Robert Longo', 'Johnny Mnemonic'],
+  ['Howard Deutch', 'The Replacements'],
+  ['Taylor Hackford', 'The Devil\'s Advocate'],
+  ['Rob Reiner', 'A Few Good Men'],
+  ['Tony Scott', 'Top Gun'],
+  ['Cameron Crowe', 'Jerry Maguire'],
+  ['Ron Howard', 'Apollo 13'],
+  ['Tom Hanks', 'That Thing You Do!'],
+  ['Robert Zemeckis', 'Cast Away'],
+  ['Robert Zemeckis', 'The Polar Express'],
+  ['Ron Howard', 'The Da Vinci Code'],
+  ['Lilly Wachowski', 'Speed Racer'],
+  ['Lana Wachowski', 'Speed Racer'],
+  ['Tom Shadyac', 'Patch Adams']
+] AS pair
+
+MATCH
+  (p:Person {name: pair[0]}),
+  (m:Movie {title: pair[1]})
+
+MERGE (p)-[:DIRECTED]->(m);
+```
+
+---
+
+# 5. Create WROTE Relationships
+
+```cypher
+UNWIND [
+  ['Lilly Wachowski', 'The Matrix'],
+  ['Lana Wachowski', 'The Matrix'],
+  ['Lilly Wachowski', 'The Matrix Reloaded'],
+  ['Lana Wachowski', 'The Matrix Reloaded'],
+  ['Lilly Wachowski', 'The Matrix Revolutions'],
+  ['Lana Wachowski', 'The Matrix Revolutions'],
+  ['Aaron Sorkin', 'A Few Good Men'],
+  ['Cameron Crowe', 'Jerry Maguire'],
+  ['Tom Hanks', 'That Thing You Do!'],
+  ['Lilly Wachowski', 'Speed Racer'],
+  ['Lana Wachowski', 'Speed Racer']
+] AS pair
+
+MATCH
+  (p:Person {name: pair[0]}),
+  (m:Movie {title: pair[1]})
+
+MERGE (p)-[:WROTE]->(m);
+```
+
+---
+
+# 6. Create PRODUCED Relationships
+
+```cypher
+UNWIND [
+  ['Joel Silver', 'The Matrix'],
+  ['Joel Silver', 'The Matrix Reloaded'],
+  ['Joel Silver', 'The Matrix Revolutions'],
+  ['Joel Silver', 'Speed Racer'],
+  ['Brian Grazer', 'Apollo 13'],
+  ['Brian Grazer', 'The Da Vinci Code']
+] AS pair
+
+MATCH
+  (p:Person {name: pair[0]}),
+  (m:Movie {title: pair[1]})
+
+MERGE (p)-[:PRODUCED]->(m);
+```
+
+---
+
+# 7. Create REVIEWED Relationships
+
+The `REVIEWED` relationship contains two properties:
+
+- `rating`
+- `summary`
+
+```cypher
+UNWIND [
+  {
+    p: 'Jessica Thompson',
+    m: 'The Matrix',
+    rating: 92,
+    summary: 'Groundbreaking, and a lot of Fun'
+  },
+  {
+    p: 'Angela Scope',
+    m: 'The Matrix',
+    rating: 84,
+    summary: 'Great action, slightly confusing plot'
+  },
+  {
+    p: 'Paul Blythe',
+    m: 'The Replacements',
+    rating: 68,
+    summary: 'Fun sports comedy, light and easy'
+  },
+  {
+    p: 'Jessica Thompson',
+    m: 'The Replacements',
+    rating: 62,
+    summary: 'Predictable but harmless'
+  },
+  {
+    p: 'Jessica Thompson',
+    m: 'A Few Good Men',
+    rating: 88,
+    summary: 'Sharp courtroom drama'
+  },
+  {
+    p: 'James Thompson',
+    m: 'Cast Away',
+    rating: 90,
+    summary: 'Powerful and moving'
+  },
+  {
+    p: 'Angela Scope',
+    m: 'Cast Away',
+    rating: 64,
+    summary: 'Slow in places'
+  },
+  {
+    p: 'Paul Blythe',
+    m: 'The Da Vinci Code',
+    rating: 55,
+    summary: 'Not as Fun as the book'
+  },
+  {
+    p: 'Jessica Thompson',
+    m: 'The Da Vinci Code',
+    rating: 72,
+    summary: 'Fun puzzle-box thriller'
+  },
+  {
+    p: 'James Thompson',
+    m: 'The Polar Express',
+    rating: 70,
+    summary: 'Fun for the whole family'
+  },
+  {
+    p: 'Paul Blythe',
+    m: 'Speed Racer',
+    rating: 60,
+    summary: 'Colorful and fun'
+  },
+  {
+    p: 'Jessica Thompson',
+    m: 'Jerry Maguire',
+    rating: 86,
+    summary: 'Warm and funny'
+  }
+] AS row
+
+MATCH
+  (p:Person {name: row.p}),
+  (m:Movie {title: row.m})
+
+MERGE (p)-[r:REVIEWED]->(m)
+
+SET
+  r.rating = row.rating,
+  r.summary = row.summary;
+```
+
+---
+
+# 8. Create FOLLOWS Relationships
+
+```cypher
+UNWIND [
+  ['James Thompson', 'Jessica Thompson'],
+  ['Angela Scope', 'Jessica Thompson'],
+  ['Paul Blythe', 'Angela Scope']
+] AS pair
+
+MATCH
+  (a:Person {name: pair[0]}),
+  (b:Person {name: pair[1]})
+
+MERGE (a)-[:FOLLOWS]->(b);
+```
+
+---
+
+# 9. Verify Node Counts
+
+Expected:
+
+- `Movie` = **16**
+- `Person` = **52**
+
+```cypher
+MATCH (n)
+
+RETURN
+  labels(n)[0] AS label,
+  count(*) AS total
+
+ORDER BY label;
+```
+
+---
+
+# 10. Verify Relationship Counts
+
+Expected:
+
+| Relationship | Count |
+|---|---:|
+| ACTED_IN | 52 |
+| DIRECTED | 20 |
+| WROTE | 11 |
+| PRODUCED | 6 |
+| REVIEWED | 12 |
+| FOLLOWS | 3 |
+| **Total** | **104** |
+
+```cypher
+MATCH ()-[r]->()
+
+RETURN
+  type(r) AS relationship,
+  count(*) AS total
+
+ORDER BY relationship;
+```
+
+---
+
+# Quick Graph Structure
+
+```text
+(Person)-[:ACTED_IN]->(Movie)
+
+(Person)-[:DIRECTED]->(Movie)
+
+(Person)-[:WROTE]->(Movie)
+
+(Person)-[:PRODUCED]->(Movie)
+
+(Person)-[:REVIEWED {
+    rating,
+    summary
+}]->(Movie)
+
+(Person)-[:FOLLOWS]->(Person)
+```
+
+---
+
+# Memory Trick
+
+Think about the Movies graph as:
+
+```text
+PERSON
+  |
+  |-- ACTED_IN ---> MOVIE
+  |
+  |-- DIRECTED ---> MOVIE
+  |
+  |-- WROTE ------> MOVIE
+  |
+  |-- PRODUCED ---> MOVIE
+  |
+  |-- REVIEWED ---> MOVIE
+  |
+  |-- FOLLOWS ----> PERSON
+```
+
+### Easy Memory
+
+```text
+Person → Movie
+
+Actor
+Director
+Writer
+Producer
+Reviewer
+
+Person → Person
+
+Follower
+```
 ---
 
 # Part 1 — Retrieve nodes
