@@ -646,7 +646,13 @@ MATCH (m:Movie {released: 2003}) RETURN m.title, m.released, m.tagline
 
 ### Exercise 2.3: Query the database for all property keys ✨
 ```cypher
-CALL db.propertyKeys()
+CALL db.propertyKeys() ;  // this will give all properties from db
+
+
+
+MATCH (m:Movie)
+RETURN  properties(m);  // this will give properties related to movie
+
 ```
 
 ### Exercise 2.4a: Movies released in a year — return titles ✅
