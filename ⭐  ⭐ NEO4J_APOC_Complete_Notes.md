@@ -10,6 +10,8 @@ All practice queries below reuse the **same dataset** as `Day1_Cypher_Practice_Q
 >
 > **Version awareness:** APOC 5.26 is the LTS line for Neo4j 5 (Cypher 5). APOC 2025.06+ pairs with Neo4j 2025.06+, which lets you choose **Cypher 5 or Cypher 25** — some procedures (e.g. the old `apoc.trigger.add`) still work under Cypher 5 but are **not available in Cypher 25**. Always check `RETURN apoc.version();` and read the docs for *your* version.
 >
+> **Neo4j Aura users:** Aura only pre-installs a *subset* of APOC Core — notably **no `apoc.trigger.*`, no `apoc.load.csv`, no `apoc.log.*`**. See **Appendix B**.
+>
 > **Biggest fixes vs. the old notes:** (1) triggers → `apoc.trigger.install/drop/...`, (2) `apoc.*` config settings now belong in `apoc.conf`, not `neo4j.conf`, (3) `apoc.text.join` and `apoc.date.format` are deprecated in favor of native Cypher, (4) native `CALL {} IN TRANSACTIONS` is now the first choice for batching.
 
 ---
@@ -543,7 +545,7 @@ apoc.periodic.iterate = "big job? break it into small batched transactions"
 
 ## ⚠️ Native Alternative — `CALL {} IN TRANSACTIONS`
 
-Neo4j 5 introduced batching natively in Cypher, so `apoc.periodic.iterate` is no longer the only answer. (The old APOC `rock_n_roll` procedures were removed in APOC 5.0 with exactly this native replacement in mind.)
+Neo4j 5 introduced batching natively in Cypher, so `apoc.periodic.iterate` is no longer the only answer. The Aura APOC page now flags `apoc.periodic.iterate` as **Deprecated in Cypher 25** (it still works under Cypher 5), which is one more reason to prefer the native form for new code. (The old APOC `rock_n_roll` procedures were removed in APOC 5.0 with exactly this native replacement in mind.)
 
 ```cypher
 // Neo4j Browser needs :auto for CALL ... IN TRANSACTIONS
@@ -1405,9 +1407,15 @@ Reviewed against the official Neo4j APOC docs ("Deprecations and additions", per
 | `apoc.initializer.cypher` | Removed — use database-specific `apoc.initializer.<databaseName>` |
 | Triggers "just work" | Must set `apoc.trigger.enabled=true` |
 
-## A.5 Checked and still current
+## A.5 "Deprecated in Cypher 25" flags (still work under Cypher 5)
 
-`apoc.coll.toSet`, `apoc.convert.toJson`, `apoc.convert.fromJsonMap`, `apoc.convert.fromJsonList`, and `apoc.periodic.iterate` are all still listed in the current docs (`iterate` is not deprecated, though native `CALL {} IN TRANSACTIONS` is often the better first choice).
+The current Neo4j Aura APOC support page labels these items used in these notes as **Deprecated in Cypher 25**. That means they are flagged for the newer Cypher version — they still run under Cypher 5, but plan to migrate:
+
+`apoc.periodic.iterate`, `apoc.coll.toSet`, `apoc.date.format`, `apoc.date.parse`, `apoc.create.node`, `apoc.create.relationship`, `apoc.create.addLabels`, `apoc.refactor.setType`, `apoc.meta.cypher.type`, `apoc.when` / `apoc.case` / `apoc.do.when` / `apoc.do.case`.
+
+> ✏️ **Correction:** an earlier version of these notes listed `apoc.periodic.iterate` and `apoc.coll.toSet` as "still current, not deprecated." The live Aura page shows both flagged as Deprecated in Cypher 25, so that statement was incomplete.
+
+**Listed with no deprecation flag on that page:** `apoc.convert.toJson`, `fromJsonMap`, `fromJsonList`, `apoc.merge.node`, `apoc.periodic.repeat`, `apoc.path.expandConfig`, `apoc.refactor.mergeNodes`, `apoc.meta.schema`, `apoc.meta.stats`, `apoc.export.cypher.all`, `apoc.export.csv.query`, `apoc.load.json`, `apoc.algo.dijkstra`, `apoc.map.merge`, `apoc.map.removeKeys`, `apoc.coll.intersection`, `apoc.coll.subtract`, `apoc.coll.sortMaps`.
 
 ## A.6 Not individually verified
 
@@ -1428,6 +1436,63 @@ Then check the procedure's own page in the APOC docs (deprecated ones carry a no
 
 ---
 
+# Appendix B — What Works on Neo4j Aura ☁️
+
+Aura pre-installs only **a subset of APOC Core** — not the full library and not APOC Extended. This appendix checks every `apoc.*` name used in these notes against the official Aura APOC support list.
+
+## B.1 ❌ Used in these notes but NOT available on Aura
+
+| Notes item | Status on Aura | What to do instead |
+|---|---|---|
+| **`apoc.trigger.*`** (install / drop / dropAll / start / stop / show / list, and the old add / remove) | **Not available** — the `apoc.trigger` namespace is absent from Aura's list | Put the logic in your write queries (`MERGE ... ON CREATE SET n.createdAt = datetime()`), in application code, or a scheduled job |
+| **`apoc.load.csv`** | **Not available** — Aura's `apoc.load` list is only `json`, `jsonArray`, `xml` (and `arrow` in the docs); `load.csv` is an APOC *Extended* procedure | Native Cypher `LOAD CSV FROM "https://..." AS row` |
+| **`apoc.log.info`** (section 17) | **Not available** — the `apoc.log` namespace is absent | Use Aura's query log / log tooling, or return diagnostics from the query |
+| **JDBC loading** (`apoc.load.jdbc`, mentioned in section 10) | **Not available** — Extended | Export from the RDBMS to CSV/JSON, or use an ETL tool / connector |
+| **`apoc.custom.*`**, **`apoc.uuid.*`**, **`apoc.ttl.*`** (mentioned in Appendix A replacements) | **Not available** — namespaces absent | `randomUUID()` for UUIDs; an explicit cleanup query for expiry |
+
+> Note: the trigger procedures are documented as **APOC Core**, but Aura's pre-installed subset still leaves them out. So "it's Core, therefore it's on Aura" is **not** a safe assumption — always check the Aura list.
+
+## B.2 ✅ Used in these notes and available on Aura
+
+`apoc.periodic.iterate`, `apoc.periodic.repeat`, `apoc.coll.toSet`, `apoc.coll.intersection`, `apoc.coll.subtract`, `apoc.coll.sortMaps`, `apoc.convert.toJson`, `apoc.convert.fromJsonMap`, `apoc.convert.fromJsonList`, `apoc.create.node`, `apoc.create.relationship`, `apoc.create.addLabels`, `apoc.create.vNode`, `apoc.create.vRelationship`, `apoc.create.virtualPath`, `apoc.merge.node`, `apoc.refactor.mergeNodes`, `apoc.refactor.setType`, `apoc.refactor.cloneNodes`, `apoc.path.expandConfig`, `apoc.meta.schema`, `apoc.meta.stats`, `apoc.schema.nodes`, `apoc.export.cypher.all`, `apoc.export.csv.query`, `apoc.load.json`, `apoc.map.merge`, `apoc.map.removeKeys`, `apoc.text.join`, `apoc.text.levenshteinDistance`, `apoc.text.capitalize`, `apoc.util.validate`, `apoc.date.format`, `apoc.date.parse`, `apoc.temporal.toZonedTemporal`, `apoc.algo.dijkstra`, `apoc.help`, `apoc.version`.
+
+(Several of these carry a "Deprecated in Cypher 25" flag — see A.5.)
+
+## B.3 ⚠️ Present on Aura, but check before relying on it
+
+- **File-based examples:** `apoc.load.json("file:///...")` and `apoc.export.*` writing to a named file assume a server filesystem and `apoc.import.file.enabled` / `apoc.export.file.enabled` in `apoc.conf`. Aura doesn't give you that filesystem. I did **not** find this spelled out in the Aura docs I checked, so treat file paths as unlikely to work and prefer HTTPS URLs for loading and the `stream` option for exports — then test on your instance.
+- **Deprecation flags** apply on Aura too (A.5).
+- **Version differences:** the Aura list changes over time — re-check the live page: https://neo4j.com/docs/aura/apoc/
+
+## B.4 Replacing a trigger on Aura — practical options
+
+```cypher
+// 1) Do it in the write itself (most common replacement for "set createdAt on new nodes")
+MERGE (c:Customer {customerId: $id})
+  ON CREATE SET c.createdAt = datetime()
+  ON MATCH  SET c.updatedAt = datetime()
+SET c.name = $name;
+```
+
+```cypher
+// 2) A scheduled job (apoc.periodic.repeat IS available on Aura) for periodic derived data
+CALL apoc.periodic.repeat(
+  "refresh-order-counts",
+  "MATCH (c:Customer)-[r:PURCHASED]->() WITH c, count(r) AS n SET c.purchaseCount = n",
+  3600
+);
+```
+
+Other options: enforce the rule in your application/API layer, or look at Neo4j's Change Data Capture for event-driven reactions (check what your Aura tier supports).
+
+## B.5 Interview soundbite
+
+> "APOC triggers aren't in Aura's pre-installed APOC subset, so on Aura I'd put that logic into the write queries or the application layer, and use a scheduled `apoc.periodic.repeat` job only when I need periodic derived data. I always check Aura's APOC support list before designing around a procedure."
+
+Source: Neo4j Aura docs, "APOC support" (https://neo4j.com/docs/aura/apoc/), compared against every `apoc.*` name in these notes.
+
+---
+
 # Quick Reference Cheat Sheet
 
 | Need to... | Use |
@@ -1444,7 +1509,7 @@ Then check the procedure's own page in the APOC docs (deprecated ones carry a no
 | Import CSV/JSON/JDBC/XML | `apoc.load.*` |
 | Export to CSV/JSON/Cypher/GraphML | `apoc.export.*` |
 | Safely batch a huge write | Native `CALL {} IN TRANSACTIONS` first; `apoc.periodic.iterate` for retries / parallel |
-| Run Cypher automatically on data changes | `apoc.trigger.install / drop / start / stop` ⚠️ (not `add`) |
+| Run Cypher automatically on data changes | `apoc.trigger.install / drop / start / stop` ⚠️ (not `add`; **not available on Aura**) |
 | Inspect graph/schema shape | `apoc.meta.*`, `apoc.schema.*` |
 | Legacy graph algorithms (prefer GDS instead) | `apoc.algo.*` |
 | Validate / log inside a query | `apoc.util.*`, `apoc.log.*` |
